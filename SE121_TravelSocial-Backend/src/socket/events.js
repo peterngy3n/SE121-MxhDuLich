@@ -11,7 +11,8 @@ const EVENTS = {
         MESSAGE_SENT: 'message sent',
         MESSAGE: 'chat message',
         TYPING: 'typing',
-        STOP_TYPING: 'stop typing'
+        STOP_TYPING: 'stop typing',
+        NEW_MESSAGE: 'new message',
     },
     
     // Sự kiện người dùng

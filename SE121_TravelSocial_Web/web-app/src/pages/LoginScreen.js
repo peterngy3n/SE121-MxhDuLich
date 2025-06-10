@@ -45,6 +45,7 @@ function LoginScreen() {
         // Sau khi login thành công, lưu id vào localStorage
         localStorage.setItem('userId', data.data._id);
         localStorage.setItem('userRole', data.data.userRole);
+        localStorage.setItem('token', data.token);
         // navigate('/dashboard/business');
         if (data.data.userRole === 'admin') {
           navigate('/dashboard/admin');

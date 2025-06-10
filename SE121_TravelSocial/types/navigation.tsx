@@ -22,7 +22,7 @@ export type SelectedRoom = {
     'personal-information-screen': undefined;
     'notifications-screen': undefined;
     'chat-board-screen': undefined;
-    'chat-screen': undefined;
+    'chat-screen': { conversationId: string, userName: string};
     'main-screen': undefined;
     'payment-method-screen': { bookingId: string; locationId: string; totalPrice: string; selectedRoomsData: SelectedRoom[] };
     'add-new-payment-method-screen': undefined;

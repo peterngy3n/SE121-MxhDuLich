@@ -7,6 +7,7 @@ import { Ionicons, FontAwesome6 } from '@expo/vector-icons';
 import { useUser } from '@/context/UserContext';
 import {API_BASE_URL} from '../../constants/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { TokenService } from '@/store/TokenService';
 
 
 
@@ -41,8 +42,11 @@ export default function LoginScreen ({navigation}: {navigation: NativeStackNavig
             console.log(data);
             if (response.ok) {
                 const userId = data.data;  
-                setUserId(userId?._id);  
-                await AsyncStorage.setItem('userData', JSON.stringify(userId));                console.log('User ID:', userId);
+                setUserId(userId?._id);
+                await AsyncStorage.setItem('token', data.token); // Store token
+                await AsyncStorage.setItem('userData', JSON.stringify(userId));               
+                console.log('User ID:', userId);
+                //console.log('Token:', data.token, await AsyncStorage.getItem('token'));
                 navigation.navigate('main-screen');
             } else {
                 Alert.alert('Login Failed', data.error || 'Please try again.');

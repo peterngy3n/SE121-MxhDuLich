@@ -3,7 +3,7 @@ const authController = require('../../controllers/general/conversation.controlle
 const { checkUser } = require('../../middleware/auth.middleware')
 const router = Router()
 
-router.get('/conversation/:userId', checkUser, authController.findUserConversation)
+router.get('/conversation/:userId', authController.findUserConversation)
 //router.get('/conversation/:firstId/:secondId', authController.findConversations)
 router.post('/conversation', checkUser, authController.createConversation)
 

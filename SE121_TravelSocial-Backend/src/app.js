@@ -67,7 +67,7 @@ countConnect()
 
 //Handle routers
 
-app.get('/', async (req, res) => {
+app.get('/redis', async (req, res) => {
     await client.set('message', 'Hello Redis from Express!');
     const message = await client.get('message');
     res.send(message);

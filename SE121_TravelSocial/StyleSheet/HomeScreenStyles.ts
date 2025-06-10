@@ -27,7 +27,7 @@ export default StyleSheet.create({
         paddingHorizontal: 10,
         paddingVertical: 10,
         backgroundColor: '#F3F8FE',
-        width: '90%',
+        width: '85%',
       },
     icon: {
         width: 20, 
@@ -112,5 +112,12 @@ export default StyleSheet.create({
         fontSize: 16,
         borderBottomWidth: 1,
         borderBottomColor: '#ccc',
+    },
+    messageButton: {
+        top: 16,
+        backgroundColor: 'white',
+        padding: 8,
+        borderRadius: 16,
+        elevation: 5,
     },
 });

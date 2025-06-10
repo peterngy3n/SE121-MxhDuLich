@@ -3,10 +3,35 @@
 const EVENTS = require("../events");
 const messageService = require('../../services/general/message.service');
 const Conversation = require("../../models/general/conversation.model");
+const { NotFoundException } = require("../../errors/exception");
 
 
 // Emit: { userId, conversationId, message }
 // user connected vào socket => socket.id
+const emitUserListHandler = async (messageData, io) => {
+    const { senderId, message, conversationId, images, videos } = messageData;
+    const conversation = await Conversation.findById(conversationId);
+    
+    if (!conversation) {
+        throw new NotFoundException();
+    }
+    console.log("Conversation members:", conversation.member);
+    const memberIds = conversation.member.map(member => member._id.toString());
+
+    memberIds.forEach(memberId => {
+        if(memberId !== senderId) {
+            const roomId = `user_${memberId}`;
+            io.to(roomId).emit(EVENTS.CHAT.NEW_MESSAGE, {
+                from: senderId,
+                message: message,
+                conversationId: conversationId,
+                images: images,
+                videos: videos
+            });
+        }
+    })
+    
+}
 
 const emitMessageToUserRoomHandler = async (messageData, io) => {
     const { senderId, message, conversationId, images, videos } = messageData;
@@ -87,6 +112,7 @@ const emitChatSentHandler = (io, socket) => {
 }
 
 module.exports = {
+    emitUserListHandler,
     emitMessageToUserRoomHandler,
     emitMessageToConversationRoomHandler,
     listenPrivateChatHandler,

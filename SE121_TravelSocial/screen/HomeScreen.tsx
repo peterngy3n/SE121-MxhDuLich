@@ -157,14 +157,14 @@ export default function HomeScreen ({navigation} : {navigation : NativeStackNavi
       style={styles.backgroundImage} 
     >
         <View style={styles.container}>
-            <View style={{alignItems:'center', width:'100%'}}>
+            <View style={{alignItems:'center', width:'95%', flexDirection: 'row', justifyContent: 'space-around', marginHorizontal: 10}}>
                 <View style={styles.search}>
                     <TouchableOpacity>
                         <Image source={require('../assets/icons/Search.png')} style={styles.icon} />
                     </TouchableOpacity>                   
                     <TextInput
                         style={styles.input}
-                        placeholder="Tìm kiếm"
+                        placeholder="Tìm kiến"
                         value={query}
                         onChangeText={handleTextChange}
                         placeholderTextColor="#000000"
@@ -179,6 +179,12 @@ export default function HomeScreen ({navigation} : {navigation : NativeStackNavi
                         </View>
                     )}
                 </View>
+
+                <TouchableOpacity onPress={() => navigation.navigate('chat-board-screen')} style={styles.messageButton}>
+                    <Image style={{width:30, height:30}} source={require('../assets/icons/message.png')}></Image>
+                    {/* <FontAwesome name="message" size={24} color="#FF4500" /> */}
+                </TouchableOpacity>
+                
             </View>
             <View style={styles.categoryContainer}>
                 <FlatList
@@ -224,5 +230,3 @@ export default function HomeScreen ({navigation} : {navigation : NativeStackNavi
     </ImageBackground>
     )
 }
-
-

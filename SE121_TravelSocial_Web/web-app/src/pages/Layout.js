@@ -19,6 +19,7 @@ const titleMap = [
   { path: /^\/business\/location\/list$/, main: 'Danh Sách Địa Điểm', sub: null },
   { path: /^\/business\/location\/detail\/[^/]+$/, main: 'Danh Sách Địa Điểm', sub: 'Chi Tiết Địa Điểm' },
   { path: /^\/business\/chat$/, main: 'Chăm sóc khách hàng', sub: null },
+  { path: /^\/business\/chat\/conversation\/[^/]+$/, main: 'Chăm sóc khách hàng', sub: 'Cuộc hội thoại' },
   { path: /^\/business\/voucher$/, main: 'Voucher', sub: null },
   { path: /^\/business\/statistic$/, main: 'Thống Kê', sub: null },
 ];

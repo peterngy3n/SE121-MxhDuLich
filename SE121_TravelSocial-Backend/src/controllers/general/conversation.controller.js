@@ -20,6 +20,7 @@ module.exports.findUserConversation = async (req, res, next) => {
     try {
         const userId = req.params.userId
         const result = await conversationSvc.getUserConversation(userId)
+        //console.log("User Conversations:", result);
         res.status(200).json({
             isSuccess: true,
             data: result,

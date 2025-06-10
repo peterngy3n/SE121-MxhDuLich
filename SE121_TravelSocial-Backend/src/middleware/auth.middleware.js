@@ -99,7 +99,16 @@ const checkUser = (req, res, next) => {
     //     data: null
     // });
     // }
-    const token = req.cookies.jwt;
+    
+    let token;
+    if (req.headers.authorization?.startsWith('Bearer ')) {
+      token = req.headers.authorization.split(' ')[1];
+    }
+    else if (req.cookies.jwt) {
+      token = req.cookies.jwt;
+    }
+    console.log('TokenA::', token);
+
     if (!token) {
       return res.status(401).json({
           isSuccess: false,

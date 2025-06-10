@@ -74,7 +74,7 @@ const leaveUserRoom = (io, data) => {
 const joinConversationRoom = (io, data) => {
     const { socketId, conversationId } = data
     const socket = io.sockets.sockets.get(socketId);
-
+    console.log('Join conv-room::' + socket)
     if (!socket) {
         throw new NotFoundException() 
     }

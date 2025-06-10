@@ -10,6 +10,8 @@ npm-debug.*
 *.orig.*
 web-build/
 
+constants/config.js
+
 # macOS
 .DS_Store
 
