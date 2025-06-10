@@ -63,7 +63,8 @@ export default function ReservationRequiredScreen({ navigation }: {navigation: N
     const [showVoucherModal, setShowVoucherModal] = useState(false);
     const [isCalculating, setIsCalculating] = useState(false);
     const [previewBookingId, setPreviewBookingId] = useState<string | null>(null);
-   
+    // Thêm state lưu giá giảm voucher (chưa thuế)
+    const [voucherDiscount, setVoucherDiscount] = useState(0);
 
     const totalRooms = selectedRoomsData.reduce((sum, room) => sum + room.count, 0);
 
@@ -83,9 +84,10 @@ export default function ReservationRequiredScreen({ navigation }: {navigation: N
     const servicePrice = calculateTotal();
     //   const cleaningFee = 15000.0;
     //   const serviceFee = roomPrice * 0.01;
-      // const tax = 0.08 * (roomPrice + servicePrice);
-      const totalPrice = roomPrice  + servicePrice;
+      const tax = 0.0008 * (roomPrice + servicePrice);
+      const totalPrice = roomPrice   + servicePrice;
 
+      const [displayedTax, setDisplayedTax] = useState(tax);
       const [displayedTotalPrice, setDisplayedTotalPrice] = useState(totalPrice);
     
       const fetchLocationDetails = async (id: string) => {
@@ -239,6 +241,28 @@ useEffect(() => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [selectedVoucher]);
 
+// Đảm bảo luôn có previewBookingId khi vào trang (kể cả khi không chọn voucher)
+useEffect(() => {
+  if (!previewBookingId) {
+    createPreviewBooking().then((id) => {
+      if (id) {
+        setPreviewBookingId(id);
+      }
+    });
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+
+// Đảm bảo khi thay đổi selectedRoomsData hoặc selectedServicesData thì luôn tạo lại previewBookingId
+useEffect(() => {
+  createPreviewBooking().then((id) => {
+    if (id) {
+      setPreviewBookingId(id);
+    }
+  });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [selectedRoomsData, selectedServicesData]);
+
 // Đảm bảo khi voucher thay đổi, luôn cập nhật lại tổng tiền
 useEffect(() => {
   if (selectedVoucher) {
@@ -282,20 +306,21 @@ const createPreviewBooking = async () => {
   }
 };
 
-// Sửa lại recalculateTotalPrice
+// Sửa lại recalculateTotalPrice để tính đúng tổng tiền và thuế
 const recalculateTotalPrice = async (voucherObj?: any) => {
   setIsCalculating(true);
   try {
-    // Bước 1: Tạo preview booking và lấy preview_bookingId
     const previewId = await createPreviewBooking();
     if (!previewId) {
-      setDisplayedTotalPrice(totalPrice);
+      setDisplayedTotalPrice(totalPrice + tax);
+      setDisplayedTax(tax);
+      setVoucherDiscount(0);
       setIsCalculating(false);
       return;
     }
     setPreviewBookingId(previewId);
-    let finalPrice = totalPrice;
-    // Bước 2: Nếu có voucher, gọi /voucher/verify với code và preview_bookingId
+    let discount = 0;
+    let priceBeforeTax = totalPrice;
     if (voucherObj) {
       try {
         const verifyPayload = {
@@ -309,17 +334,23 @@ const recalculateTotalPrice = async (voucherObj?: any) => {
         });
         const voucherData = await voucherRes.json();
         if (voucherData.isSuccess && voucherData.data) {
-          const discount = voucherData.data.discount || 0;
-          finalPrice = voucherData.data.totalPriceAfterDiscount || (totalPrice - discount);
-          if (finalPrice < 0) finalPrice = 0;
+          discount = voucherData.data.discount || 0;
+          priceBeforeTax = totalPrice - discount;
+          if (priceBeforeTax < 0) priceBeforeTax = 0;
         }
       } catch (e) {
-        finalPrice = totalPrice;
+        priceBeforeTax = totalPrice;
+        discount = 0;
       }
     }
-    setDisplayedTotalPrice(finalPrice);
+    setVoucherDiscount(discount);
+    const newTax = 0.0008 * priceBeforeTax;
+    setDisplayedTax(newTax);
+    setDisplayedTotalPrice(priceBeforeTax + newTax);
   } catch (e) {
-    setDisplayedTotalPrice(totalPrice);
+    setDisplayedTotalPrice(totalPrice + tax);
+    setDisplayedTax(tax);
+    setVoucherDiscount(0);
   } finally {
     setIsCalculating(false);
   }
@@ -330,6 +361,7 @@ const recalculateTotalPrice = async (voucherObj?: any) => {
         //     Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ thông tin liên lạc.');
         //     return;
         // }
+
         if (!previewBookingId) {
             Alert.alert('Lỗi', 'Không thể tạo booking preview. Vui lòng thử lại.');
             return;
@@ -342,7 +374,7 @@ const recalculateTotalPrice = async (voucherObj?: any) => {
                 checkinDate: selectedRoomsData[0].roomDetails.checkinDate,
                 checkoutDate: selectedRoomsData[0].roomDetails.checkoutDate,
                 preview_bookingId: previewBookingId,
-                voucherId: selectedVoucher?._id || null,
+                ...(selectedVoucher?._id ? { voucherId: selectedVoucher._id } : {}), // Chỉ thêm voucherId nếu có
                 contact: {
                     firstName: name.firstName,
                     lastName: name.lastName,
@@ -428,7 +460,7 @@ const recalculateTotalPrice = async (voucherObj?: any) => {
                       <Text style={[styles.bookingTableCell, {flex:2}]}>{room.roomDetails.name}</Text>
                       <Text style={styles.bookingTableCell}>{room.count}</Text>
                       <Text style={styles.bookingTableCell}>phòng</Text>
-                      <Text style={styles.bookingTableCell}>{(room.roomDetails.price * room.nights).toLocaleString('vi-VN')} VND</Text>
+                      <Text style={styles.bookingTableCell}>{(room.roomDetails.price * room.nights)?.toLocaleString('vi-VN')} VND</Text>
                     </View>
                   ))}
                   {/* Dịch vụ */}
@@ -500,16 +532,16 @@ const recalculateTotalPrice = async (voucherObj?: any) => {
                     <Text style={styles.priceValue}>{calculateTotal()?.toLocaleString('vi-VN')} VND</Text>
                   </View>
                   {/* Nếu có thuế, có thể thêm dòng thuế ở đây */}
-                  {/* <View style={styles.priceRowTable}>
+                  <View style={styles.priceRowTable}>
                     <Image source={require('../assets/icons/tax.png')} style={styles.priceIcon} />
                     <Text style={styles.priceLabel}>Thuế</Text>
-                    <Text style={styles.priceValue}>{tax.toLocaleString('vi-VN')} VND</Text>
-                  </View> */}
-                  {selectedVoucher && displayedTotalPrice < totalPrice && (
+                    <Text style={styles.priceValue}>{displayedTax?.toLocaleString('vi-VN')} VND</Text>
+                  </View>
+                  {selectedVoucher && voucherDiscount > 0 && (
                     <View style={[styles.priceRowTable, {backgroundColor:'#e6f0ff'}]}> 
                       <Image source={require('../assets/icons/ticket.png')} style={styles.priceIcon} />
                       <Text style={[styles.priceLabel, {color:'#176FF2'}]}>Giảm giá voucher</Text>
-                      <Text style={[styles.priceValue, {color:'#176FF2'}]}>- {(totalPrice - displayedTotalPrice).toLocaleString('vi-VN')} VND</Text>
+                      <Text style={[styles.priceValue, {color:'#176FF2'}]}>- {voucherDiscount?.toLocaleString('vi-VN')} VND</Text>
                     </View>
                   )}
                   <View style={styles.priceRowTableTotal}>

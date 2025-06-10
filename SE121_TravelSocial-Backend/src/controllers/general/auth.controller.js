@@ -8,7 +8,7 @@ module.exports.signup_get = (req, res) => { //Render home screen
     res.render('new user')
 }
 
-const maxAge = 30 * 60;
+const maxAge = 60 * 60;
 
 const createToken = (id) => {
     return jwt.sign({id}, 'travel', {

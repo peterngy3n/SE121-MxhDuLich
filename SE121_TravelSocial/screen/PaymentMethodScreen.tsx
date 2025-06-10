@@ -41,6 +41,7 @@ export default function PaymentMethodScreen({ navigation }: {navigation: NativeS
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
     const [showWebView, setShowWebView] = useState(false);
+    const [showSuccessModal, setShowSuccessModal] = useState(false);
     const webviewRef = useRef<WebView>(null);
 
     // Gọi API tạo link thanh toán VNPay khi vào trang
@@ -378,11 +379,11 @@ const saveQRImageToGallery = async () => {
                                 // @ts-ignore
                                 webviewRef.current?.stopLoading && webviewRef.current.stopLoading();
                                 setShowWebView(false);
-                                navigation.navigate('detail-booking-screen', {
-                                    bookingId,
-                                    title: 'Kết quả thanh toán',
-                                    status: 'pending', // hoặc lấy từ backend nếu có
-                                });
+                                setShowSuccessModal(true); // Hiện modal thanh toán thành công
+                                setTimeout(() => {
+                                    setShowSuccessModal(false);
+                                    navigation.navigate('main-screen');
+                                }, 2000); // 2 giây sau tự động chuyển về main-screen
                             }
                         }}
                     />
@@ -396,6 +397,30 @@ const saveQRImageToGallery = async () => {
                     >
                         <Text style={{color:'#fff', fontWeight:'bold', fontSize:18}}>Thanh toán qua VNPay</Text>
                     </TouchableOpacity>
+                </View>
+            )}
+            {showSuccessModal && (
+                <View style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0,0,0,0.5)',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    zIndex: 9999,
+                }}>
+                    <View style={{
+                        backgroundColor: 'white',
+                        borderRadius: 16,
+                        padding: 32,
+                        alignItems: 'center',
+                    }}>
+                        <Image source={require('../assets/icons/success.png')} style={{width: 64, height: 64, marginBottom: 16}} />
+                        <Text style={{fontSize: 20, fontWeight: 'bold', color: '#176FF2', marginBottom: 8}}>Thanh toán thành công!</Text>
+                        <Text style={{fontSize: 16, color: '#333'}}>Bạn sẽ được chuyển về trang chính...</Text>
+                    </View>
                 </View>
             )}
         </View>
