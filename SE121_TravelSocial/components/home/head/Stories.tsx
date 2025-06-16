@@ -16,6 +16,11 @@ import {
   import { Ionicons } from "@expo/vector-icons";
   import PressEffect from "../../UI/PressEffect";
   import { API_BASE_URL } from "../../../constants/config";
+    import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+
+  import { useUser } from '../../../context/UserContext';
+  import AsyncStorage from '@react-native-async-storage/async-storage';
+  import axios from 'axios';
   // https://github.com/birdwingo/react-native-instagram-stories?tab=readme-ov-file
   
   // Initial data structure with self user for the "Your Story" option
@@ -49,12 +54,17 @@ interface Friend {
   type StoriesProps = {
     followingsData?: any[]; // Optional prop for following data
   };
+    type RootStackParamList = {
+    "chat-screen": { conversationId: string | number; userName: string };
+    // ... other routes if needed
+  };
   
   const Stories: React.FC<StoriesProps> = ({ followingsData }) => {
     const storiesRef = useRef(null);
     const [showStory, setShowStory] = useState(false);
     const ScrollX = useRef(new Animated.Value(0)).current;
-    const navigation = useNavigation();
+    const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+    const { userId } = useUser();
     
     // State for friends data
     const [friends, setFriends] = useState<any[]>([]);
@@ -67,7 +77,7 @@ interface Friend {
       const fetchFriends = async () => {
         setLoading(true);
         try {
-          const response = await fetch(`${API_BASE_URL}/friends?type=accept`, {
+          const response = await fetch(`${API_BASE_URL}/friends?type=accept&userId=${userId}`, {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json',
@@ -81,15 +91,14 @@ interface Friend {
           
           const data = await response.json();
           
-          if (data.isSuccess && Array.isArray(data.data)) {
+          if (data.isSuccess) {
             setFriends(data.data);
-            console.log("Friends data:", data.data);
             
           // Transform friends data into the format expected by the Stories component
             const friendStories = data.data.map((friend: Friend, index: number) => ({
-              user_id: friend.userId,
-              user_image: friend.userAvatar.url || DEFAULT_DP,
-              user_name: friend.userName || "Friend",  // Ensure we always have a user name
+              user_id: friend?.userId,
+              user_image: friend?.userAvatar?.url || DEFAULT_DP,
+              user_name: friend?.userName || "Friend",  // Ensure we always have a user name
               active: Math.random() > 0.7, // Randomly set some friends as active (for demo)
               stories: [
                 {
@@ -112,6 +121,36 @@ interface Friend {
 
       fetchFriends();
     }, []);
+
+    // Hàm lấy hoặc tạo conversationId
+    const getOrCreateConversationId = async (friendId: string, friendName: string) => {
+      try {
+        const token = await AsyncStorage.getItem('token');
+        const bearerToken = token ? `Bearer ${token}` : '';
+        // 1. Lấy danh sách hội thoại của user hiện tại
+        const res = await axios.get(`${API_BASE_URL}/conversation/${userId}`, {
+          headers: { 'Authorization': bearerToken }
+        });
+        if (res.data.isSuccess && Array.isArray(res.data.data)) {
+          // Tìm hội thoại PRIVATE với friendId
+          const found = res.data.data.find((conv: any) =>
+            conv.type === 'PRIVATE' &&
+            conv.members.some((m: any) => m._id === friendId)
+          );
+          if (found) return found._id;
+        }
+        // 2. Nếu chưa có, tạo mới
+        const createRes = await axios.post(`${API_BASE_URL}/conversation`, {
+          memberIds: [userId, friendId]
+        }, {
+          headers: { 'Authorization': bearerToken }
+        });
+        return createRes.data.data._id;
+      } catch (err) {
+        console.error('Lỗi lấy/tạo conversation:', err);
+        return null;
+      }
+    };
 
     if (loading) {
       return (
@@ -175,13 +214,18 @@ interface Friend {
             });
             return (
               <PressEffect>                <Pressable
-                  onPress={() => {
+                  onPress={async () => {
                     if (item.user_id == 0) {
                       // Handle "Your Story" option - could navigate to AddStoryScreen
                       // navigation.navigate("AddStoryScreen");
                     } else {
-                      // Navigate to friend's profile
-                      navigation.navigate("profile-social-screen" as never);
+                      // Lấy hoặc tạo conversationId, rồi chuyển sang chat-screen
+                      const conversationId = await getOrCreateConversationId(String(item.user_id), item.user_name);
+                      if (conversationId) {
+                        navigation.navigate('chat-screen', { conversationId, userName: item.user_name });
+                      } else {
+                        // Có thể show alert nếu lỗi
+                      }
                     }
                   }}
                 >
@@ -299,4 +343,3 @@ interface Friend {
       textAlign: 'center',
     }
   });
-  

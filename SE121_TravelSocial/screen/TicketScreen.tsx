@@ -31,7 +31,7 @@ export default function TicketScreen() {
       const result = await response.json();
 
       setTickets(result.data); 
-      console.log('ticket: ',tickets)
+      console.log('Tickets fetched:', result.data);
       if (result.isSuccess && result.data) {
         const ticketWithNames = await Promise.all(
           result.data.map(async (ticket: any) => {
@@ -39,14 +39,14 @@ export default function TicketScreen() {
 
 
             const location = room && room.locationId ? await fetchLocationDetails(room.locationId) : null;
-            console.log('location to image: ',location)
             const imageUrl = location && location.image && location.image?.[0]?.url ? location.image?.[0].url : 'https://via.placeholder.com/150';
             // console.log('location iamge 0: ', location.image[0].url)
             setLocationId(room.locationId);
             return {
               ...ticket,
               locationName: location ? location.name : 'Unknown Location',
-              imageUrl: imageUrl, 
+              imageUrl: imageUrl,
+              locationId: room.locationId, // Lưu locationId để sử dụng sau này 
             };
           })
         );
@@ -138,7 +138,6 @@ export default function TicketScreen() {
         alert('The file is not a valid image');
         return; // Dừng lại nếu không phải hình ảnh
       }
-      console.log('location data: ',locationData);
 
       // Thêm ảnh vào FormData
       formData.append('file', blob, 'image.jpg');
@@ -146,7 +145,6 @@ export default function TicketScreen() {
       formData.append('address', locationData.address);
       formData.append('description', locationData.description);// Thêm thông tin location
 
-      console.log('form data: ',formData);
       console.log('FormData entries:', [...formData.entries()]);
 
       const config = {
@@ -231,7 +229,7 @@ export default function TicketScreen() {
                 imageUrl={item.imageUrl || 'https://via.placeholder.com/150'}
                 onCancel={() => console.log(`Cancel ticket: ${item._id}`)}
                 bookingId={item._id}
-                locationId={locationId}
+                locationId={item.locationId} // Truyền locationId vào component Ticket
                 />
             )}
             refreshControl={

@@ -44,7 +44,6 @@ export default function AvailableRoomScreen({ navigation }: {navigation: NativeS
     const route = useRoute<RouteProp<RootStackParamList, 'available-room-screen'>>();
     const { id, checkinDate, checkoutDate, serviceOfLocation } = route.params;
     const { userId } = useUser();
-    console.log('checkin ddate: ', checkinDate, serviceOfLocation);
     const [date1, setDate1] = useState(checkinDate);
     const [date2, setDate2] = useState(checkoutDate);
     
@@ -128,7 +127,6 @@ export default function AvailableRoomScreen({ navigation }: {navigation: NativeS
       
             if (Array.isArray(bookingData.data)) {
               const bookings = bookingData.data;
-              console.log(bookings);
 
               const roomResponse = await fetch(
                 `${API_BASE_URL}/room/getbylocationid/${id}`
@@ -264,10 +262,8 @@ export default function AvailableRoomScreen({ navigation }: {navigation: NativeS
             checkin_date: date1.toISOString(),
             checkout_date: date2.toISOString()
           });
-          console.log(`Tracked booking click event for user: ${userId}, location: ${id}`);
         }
 
-        console.log('selectedServicesDataaaaa: ', selectedServicesData);
         navigation.navigate('reservation-required-screen', {
           selectedRoomsData,
           selectedServicesData: selectedServicesData,

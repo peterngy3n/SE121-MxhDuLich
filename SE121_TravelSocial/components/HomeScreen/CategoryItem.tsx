@@ -25,13 +25,11 @@ export default function CategoryItem({item, selectedCategory, setSelectedCategor
             if (item.id === "all"){
                 return;
             }
-            console.log(item.id);
 
             const response = await fetch(`${API_BASE_URL}/locationbycategory/${item.id}`);
             const data = await response.json();
             if (data.isSuccess) {
                 setLocations(data.data); 
-                console.log(data);
             } else {
                 console.error('API error:', data.error);
             }

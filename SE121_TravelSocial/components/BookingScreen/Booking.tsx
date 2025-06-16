@@ -2,9 +2,11 @@ import { API_BASE_URL } from '@/constants/config';
 import { RootStackParamList } from '@/types/navigation';
 import { NavigationProp } from '@react-navigation/native';
 import { useNavigation } from '@react-navigation/native';
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Alert, Modal, TextInput } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Alert, Modal, TextInput, ScrollView } from 'react-native';
 import { Icon } from 'react-native-paper';
+import * as ImagePicker from 'expo-image-picker';
+import { useUser } from '@/context/UserContext';
 
 interface TicketProps {
   title: string;
@@ -18,37 +20,116 @@ interface TicketProps {
 
 const Ticket: React.FC<TicketProps> = ({ title, date, status, onCancel, imageUrl, bookingId, locationId }) => {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
+  const { userId } = useUser();
   const [modalVisible, setModalVisible] = useState(false);
   const [rating, setRating] = useState('');
   const [review, setReview] = useState('');
+  const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  const [reviewList, setReviewList] = useState<any[]>([]);
+  const [loadingReviews, setLoadingReviews] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingReview, setEditingReview] = useState<any>(null);
+  const [editReviewText, setEditReviewText] = useState('');
+  const [editRating, setEditRating] = useState('');
+  const [editSelectedImages, setEditSelectedImages] = useState<string[]>([]);
+  const [editReviewId, setEditReviewId] = useState<string | null>(null);
+  const [showMyReviews, setShowMyReviews] = useState(false);
 
   const handleNavigate = () => {
     navigation.navigate('detail-booking-screen', {bookingId ,title, status}); 
     console.log(bookingId)// Truyền bookingId
+    console.log(locationId)
     console.log(title)
     console.log(status)
   };
 
+  // Hàm chọn nhiều ảnh
+  const pickImages = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
+      quality: 0.7,
+    });
+    if (!result.canceled) {
+      // result.assets là mảng các ảnh được chọn
+      setSelectedImages(result.assets.map((asset) => asset.uri));
+    }
+  };
+
+  // Hàm chọn ảnh cho modal chỉnh sửa
+  const pickEditImages = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
+      quality: 0.7,
+    });
+    if (!result.canceled) {
+      setEditSelectedImages(result.assets.map((asset) => asset.uri));
+    }
+  };
+
+  // Helper to extract file name and type from URI
+  const getFilenameAndType = (uri: string) => {
+    const uriParts = uri.split("/");
+    const name = uriParts[uriParts.length - 1];
+    const fileTypeParts = name.split(".");
+    const fileType = fileTypeParts[fileTypeParts.length - 1];
+    return { name, fileType };
+  };
+
+  // Sửa hàm gửi review để gửi kèm ảnh (upload trước, lấy kết quả, rồi post review)
   const handleSubmitBooking = async () => {
     try {
-      // Gọi API để gửi đánh giá
+      let uploadedImages = [];
+      // Bước 1: Upload ảnh nếu có
+      if (selectedImages.length > 0) {
+        const formData = new FormData();
+        selectedImages.forEach((uri, idx) => {
+          const { name, fileType } = getFilenameAndType(uri);
+          formData.append('files', {
+            uri,
+            name,
+            type: `image/${fileType}`,
+          } as any);
+        });
+        const uploadResponse = await fetch(`${API_BASE_URL}/upload`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+          credentials: 'include',
+          body: formData,
+        });
+        const uploadResult = await uploadResponse.json();
+        if (!uploadResult.isSuccess) {
+          alert(uploadResult.message || 'Không thể upload ảnh.');
+          return;
+        }
+        // Giả sử uploadResult.data là [{url: "...", publicId: "..."}, ...]
+        uploadedImages = uploadResult.data.map((img: any) => img.url);
+        console.log('Uploaded images:', uploadedImages);
+      }
+      // Bước 2: Gửi review với image là mảng object
+      const reviewData = {
+        locationId,
+        rating,
+        review,
+        image: uploadedImages,
+      };
       const response = await fetch(`${API_BASE_URL}/review`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          locationId,
-          rating,
-          review,
-        }),
+        body: JSON.stringify(reviewData),
       });
-
       const result = await response.json();
-      console.log(response.json);
       if (result.isSuccess) {
         alert('Đánh giá đã được gửi!');
-        setModalVisible(false); // Đóng modal sau khi gửi thành công
+        setModalVisible(false);
+        setSelectedImages([]);
+        setReview('');
+        setRating('');
       } else {
         alert(result.message || 'Không thể gửi đánh giá.');
       }
@@ -110,6 +191,92 @@ const Ticket: React.FC<TicketProps> = ({ title, date, status, onCancel, imageUrl
     );
   };
   
+
+  // Hàm gọi API update review
+  const handleUpdateReview = async () => {
+    try {
+      let uploadedImages = [];
+      if (editSelectedImages.length > 0) {
+        const formData = new FormData();
+        editSelectedImages.forEach((uri, idx) => {
+          const { name, fileType } = getFilenameAndType(uri);
+          formData.append('files', {
+            uri,
+            name,
+            type: `image/${fileType}`,
+          } as any);
+        });
+        const uploadResponse = await fetch(`${API_BASE_URL}/upload`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'multipart/form-data' },
+          credentials: 'include',
+          body: formData,
+        });
+        const uploadResult = await uploadResponse.json();
+        if (!uploadResult.isSuccess) {
+          alert(uploadResult.message || 'Không thể upload ảnh.');
+          return;
+        }
+        uploadedImages = uploadResult.data.map((img: any) => img.url);
+      }
+      // Gửi request update review
+      const reviewData = {
+        rating: editRating,
+        review: editReviewText,
+        image: uploadedImages.length > 0 ? uploadedImages : editingReview.image,
+      };
+      const response = await fetch(`${API_BASE_URL}/review/${editReviewId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reviewData }),
+      });
+      const result = await response.json();
+      if (result.isSuccess) {
+        alert('Cập nhật đánh giá thành công!');
+        setEditModalVisible(false);
+        setEditSelectedImages([]);
+        setEditReviewText('');
+        setEditRating('');
+        setEditReviewId(null);
+        // Reload reviews
+        fetchReviews();
+      } else {
+        alert(result.message || 'Không thể cập nhật đánh giá.');
+      }
+    } catch (error) {
+      console.error('Error updating review:', error);
+      alert('Lỗi khi cập nhật đánh giá.');
+    }
+  };
+
+  // Hàm mở modal chỉnh sửa
+  const handleEditReview = (review: any) => {
+    setEditingReview(review);
+    setEditReviewText(review.review);
+    setEditRating(review.rating.toString());
+    setEditSelectedImages([]);
+    setEditReviewId(review._id);
+    setEditModalVisible(true);
+  };
+
+  // Hàm fetch lại reviews (giả sử đã có hàm fetchReviews)
+  const fetchReviews = async () => {
+    setLoadingReviews(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/review/location/${locationId}`);
+      const data = await res.json();
+      if (data.isSuccess) {
+        // Lọc chỉ review của user hiện tại
+        const userReviews = data.data.filter((review: any) => review.senderId === userId);
+        setReviewList(userReviews);
+      }
+    } catch (e) {}
+    setLoadingReviews(false);
+  };
+
+  useEffect(() => {
+    fetchReviews();
+  }, [locationId]);
 
   let statusText = '';
   let statusColor = '#000';
@@ -195,15 +362,24 @@ const Ticket: React.FC<TicketProps> = ({ title, date, status, onCancel, imageUrl
             <View style={styles.starsContainer}>
               {[1, 2, 3, 4, 5].map((star) => (
                 <TouchableOpacity key={star} onPress={() => handleStarPress(star)}>
-                   <Image
+                  <Image
                     source={
                       star <= parseFloat(rating)
-                        ? require('../../assets/icons/star.png') // Ngôi sao đầy
-                        : require('../../assets/icons/emptystar.png') // Ngôi sao rỗng
+                        ? require('../../assets/icons/star.png')
+                        : require('../../assets/icons/emptystar.png')
                     }
                     style={styles.star}
                   />
                 </TouchableOpacity>
+              ))}
+            </View>
+            {/* Nút chọn ảnh và hiển thị ảnh đã chọn */}
+            <TouchableOpacity style={{marginVertical: 10}} onPress={pickImages}>
+              <Text style={{color: '#196EEE', fontWeight: 'bold'}}>Chọn ảnh đánh giá</Text>
+            </TouchableOpacity>
+            <View style={{flexDirection: 'row', flexWrap: 'wrap', marginBottom: 10}}>
+              {selectedImages.map((uri, idx) => (
+                <Image key={idx} source={{ uri }} style={{ width: 60, height: 60, margin: 3, borderRadius: 8 }} />
               ))}
             </View>
             <View style={styles.buttonRow}>
@@ -219,6 +395,110 @@ const Ticket: React.FC<TicketProps> = ({ title, date, status, onCancel, imageUrl
           </View>
         </View>
       </Modal>
+      {/* Modal chỉnh sửa review */}
+      <Modal
+        visible={editModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setEditModalVisible(false)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Chỉnh sửa đánh giá</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Nhập đánh giá"
+              value={editReviewText}
+              onChangeText={setEditReviewText}
+              multiline
+            />
+            <View style={styles.starsContainer}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <TouchableOpacity key={star} onPress={() => setEditRating(star.toString())}>
+                  <Image
+                    source={
+                      star <= parseFloat(editRating)
+                        ? require('../../assets/icons/star.png')
+                        : require('../../assets/icons/emptystar.png')
+                    }
+                    style={styles.star}
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity style={{marginVertical: 10}} onPress={pickEditImages}>
+              <Text style={{color: '#196EEE', fontWeight: 'bold'}}>Chọn ảnh mới (nếu muốn thay)</Text>
+            </TouchableOpacity>
+            <View style={{flexDirection: 'row', flexWrap: 'wrap', marginBottom: 10}}>
+              {editSelectedImages.map((uri, idx) => (
+                <Image key={idx} source={{ uri }} style={{ width: 60, height: 60, margin: 3, borderRadius: 8 }} />
+              ))}
+            </View>
+            <View style={styles.buttonRow}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setEditModalVisible(false)}>
+                <Text style={styles.buttonText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.submitButton} onPress={handleUpdateReview}>
+                <Text style={styles.buttonText}>Cập nhật</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      {/* Hiển thị danh sách review */}
+      <View style={{marginHorizontal: 20, marginTop: 10}}>
+        <TouchableOpacity
+          style={{alignSelf: 'flex-end', marginBottom: 8, backgroundColor: '#196EEE', padding: 8, borderRadius: 8}}
+          onPress={() => setShowMyReviews((prev) => !prev)}
+        >
+          <Text style={{color: 'white', fontWeight: 'bold'}}>
+            {showMyReviews ? 'Ẩn đánh giá của bản thân' : 'Xem đánh giá của bản thân'}
+          </Text>
+        </TouchableOpacity>
+        {showMyReviews && (
+          loadingReviews ? (
+            <></>
+          ) : reviewList.length === 0 ? (
+            <></>
+          ) : (
+            reviewList.map((item, idx) => (
+              <View key={item._id || idx} style={{marginBottom: 16, backgroundColor: '#f7f7f7', borderRadius: 10, padding: 10}}>
+                <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 4}}>
+                  <Image source={item.senderAvatar?.url ? { uri: item.senderAvatar.url } : require('../../assets/images/avt.png')} style={{width: 32, height: 32, borderRadius: 16, marginRight: 8}} />
+                  <Text style={{fontWeight: 'bold'}}>{item.senderName || 'Ẩn danh'}</Text>
+                  <View style={{flexDirection: 'row', marginLeft: 8}}>
+                    {[...Array(5)].map((_, i) => (
+                      <Image
+                        key={i}
+                        source={i < (item.rating || 0) ? require('../../assets/icons/star.png') : require('../../assets/icons/emptystar.png')}
+                        style={{ width: 15, height: 15, marginRight: 2 }}
+                      />
+                    ))}
+                  </View>
+                  {item.senderId === userId && (
+                    <TouchableOpacity style={{marginLeft: 10}} onPress={() => handleEditReview(item)}>
+                      <Text style={{color: '#196EEE', fontWeight: 'bold'}}>Chỉnh sửa</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                <Text style={{marginBottom: 4}}>{item.review || 'Không có nhận xét.'}</Text>
+                {item.image && item.image.length > 0 && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4 }}>
+                    {item.image.map((img: any, idx: number) => (
+                      <Image
+                        key={img?.url + idx}
+                        source={{ uri: img }}
+                        style={{ width: 90, height: 70, borderRadius: 8, marginRight: 8, resizeMode: 'cover' }}
+                      />
+                    ))}
+                  </ScrollView>
+                )}
+              </View>
+            ))
+          ))}
+
+      </View>
     </TouchableOpacity>
 
     

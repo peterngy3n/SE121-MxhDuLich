@@ -18,7 +18,6 @@ export default function Header({ navigation }: {navigation: NativeStackNavigator
         if (jsonValue !== null) {
           const user = JSON.parse(jsonValue);
           setUserData(user);
-          console.log(user);
         }
       } catch (e) {
         

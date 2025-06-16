@@ -27,7 +27,6 @@ import {
   }
   function Post({ post, navigation }: { post: any, navigation: any }) {
     // const navigation = useNavigation();
-    console.log("Postiii", post);
     const [safeUri, setSafeUri] = useState<string>("");
     const [ratio, setRatio] = useState(1);
     //const authCtx = useContext(AuthContext);

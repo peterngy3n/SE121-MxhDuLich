@@ -30,7 +30,6 @@ import React from "react";
     const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
     useEffect(() => {
-      console.log(videoUri);
   
       return () => {
         if (timerIntervalRef.current !== null) {
@@ -132,14 +131,12 @@ import React from "react";
       }
     };
     async function takePickerHandler() {
-      console.log("first");
       if (camera) {
         const cameraOptions = {
           quality: 1,
           ratio: mode === "story" ? "9:16" : undefined,
         };
         const data = await camera.takePictureAsync(cameraOptions);
-        console.log(data);
         if (data?.uri) {
           setImage(data.uri);
         }

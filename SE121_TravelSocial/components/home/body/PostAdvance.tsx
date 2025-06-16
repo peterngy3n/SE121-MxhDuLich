@@ -1,3 +1,4 @@
+import React, { memo, useContext, useEffect, useState } from "react";
 import {
     View,
     Text,
@@ -8,7 +9,6 @@ import {
     Pressable,
     ImageBackground,
   } from "react-native";
-  import React, { useContext, useEffect, useState } from "react";
   import Ionicons from "@expo/vector-icons/Ionicons";
   import { useNavigation } from "@react-navigation/native";
   import { DEFAULT_DP, GlobalStyles } from "../../../constants/Styles";
@@ -21,8 +21,15 @@ import {
   import { API_BASE_URL } from "@/constants/config";
   const { height, width } = Dimensions.get("window");
   
-  function PostAdvance({ post, navigation } : any) {
-    console.log("PostAdvance", post);
+  // Custom compare function for memo
+function areEqual(prevProps: any, nextProps: any) {
+    // So sánh sâu các trường quan trọng của post, tránh render lại nếu không đổi
+    return prevProps.post?._id === nextProps.post?._id &&
+      JSON.stringify(prevProps.post.stat) === JSON.stringify(nextProps.post.stat) &&
+      JSON.stringify(prevProps.post.images) === JSON.stringify(nextProps.post.images);
+  }
+  
+  const PostAdvance = memo(function PostAdvance({ post, navigation } : any) {
     //const authCtx = useContext(AuthContext);
         const formatDate = (dateString: string) => {
           if (!dateString) return "";
@@ -437,7 +444,7 @@ import {
         <PostFotter />
       </View>
     );
-  }
+  }, areEqual);
   
   export default PostAdvance;
   

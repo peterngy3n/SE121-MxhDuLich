@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View, ActivityIndicator } from "react-native";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { GlobalStyles } from "../../../constants/Styles";
 import { FlatList } from "react-native";
 import { RefreshControl } from "react-native";
@@ -33,9 +33,8 @@ const Feed = ({ StoryTranslate, userData } : any) => {
       if (response.ok) {
         const data = await response.json();
         setPosts(data.data);
-        console.log("Friend posts loaded: ", data.data.length);
       } else {
-        console.error('Failed to fetch friend posts:', response.statusText);
+        console.log('Failed to fetch friend posts:', response.statusText);
         // Fallback to user's own posts
         getUserPosts();
       }
@@ -62,9 +61,8 @@ const Feed = ({ StoryTranslate, userData } : any) => {
       if (response.ok) {
         const data = await response.json();
         setPosts(data.data);
-        console.log("User posts loaded as fallback: ", data.data.length);
       } else {
-        console.error('Failed to fetch user data:', response.statusText);
+        console.log('Failed to fetch user data:', response.statusText);
       }
     } catch (error) {
       console.error('Error fetching user data:', error);
@@ -84,6 +82,16 @@ const Feed = ({ StoryTranslate, userData } : any) => {
       getFriendPosts();
     }
   }, [userData]);
+
+  // Memoized renderItem to avoid unnecessary re-renders
+  const renderItem = useCallback(
+    ({ item }: any) => (
+      <View>
+        <PostAdvance post={item} navigation={navigation} />
+      </View>
+    ),
+    [navigation]
+  );
 
   if (loading) {
     return (
@@ -116,13 +124,9 @@ const Feed = ({ StoryTranslate, userData } : any) => {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
-        keyExtractor={(item, index) => index.toString()}
+        keyExtractor={(item: any) => item._id?.toString?.() || item.id?.toString?.() || String(item)}
         data={posts}
-        renderItem={({ item, index } : any) => (
-          <View>
-            <PostAdvance post={item} navigation={navigation} />
-          </View>
-        )}
+        renderItem={renderItem}
         ListEmptyComponent={() => (
           <View style={{ padding: 20, alignItems: 'center' }}>
             <Text style={{ color: GlobalStyles.colors.gray }}>Không có bài viết nào từ bạn bè</Text>

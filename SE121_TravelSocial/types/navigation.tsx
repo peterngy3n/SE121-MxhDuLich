@@ -24,7 +24,15 @@ export type SelectedRoom = {
     'chat-board-screen': undefined;
     'chat-screen': { conversationId: string, userName: string};
     'main-screen': undefined;
-    'payment-method-screen': { bookingId: string; locationId: string; totalPrice: string; selectedRoomsData: SelectedRoom[] };
+    'payment-method-screen': { 
+      bookingId: string; 
+      locationId: string; 
+      totalPrice: string; 
+      selectedRoomsData: SelectedRoom[];
+      ImageUrl?: string | { url: string }[];
+      checkinDate?: Date | string;
+      checkoutDate?: Date | string;
+    };
     'add-new-payment-method-screen': undefined;
     'reservation-required-screen': { selectedRoomsData: SelectedRoom[], selectedServicesData: any,locationId: string};
     'available-room-screen': { id: string; checkinDate: Date; checkoutDate: Date; serviceOfLocation: any };

@@ -95,7 +95,6 @@ export default function ReservationRequiredScreen({ navigation }: {navigation: N
           const response = await fetch(`${API_BASE_URL}/locationbyid/${locationId}`);
           const data = await response.json();
           if (data.isSuccess) {
-            console.log('Location details:', data.data);
             setLocationDetails(data.data);
           } else {
             console.error('API error:', data.error);
@@ -387,7 +386,6 @@ const recalculateTotalPrice = async (voucherObj?: any) => {
                 body: JSON.stringify(bookingData),
             });
             const result = await response.json();
-            console.log('Booking creation result:', result);
             if (result.isSuccess && result.data && result.data._id) {
                 // Track booking event
                 if (userId && locationId) {
@@ -405,6 +403,10 @@ const recalculateTotalPrice = async (voucherObj?: any) => {
                     locationId: locationId,
                     totalPrice: displayedTotalPrice,
                     selectedRoomsData: selectedRoomsData,
+                    // Truyền thêm imageUrl và ngày checkin/checkout
+                    ImageUrl: locationDetails?.image?.[0]?.url || '',
+                    checkinDate: selectedRoomsData[0]?.roomDetails?.checkinDate,
+                    checkoutDate: selectedRoomsData[0]?.roomDetails?.checkoutDate,
                 });
             } else {
                 Alert.alert('Lỗi', result.message || 'Không thể tạo đặt chỗ.');
@@ -445,6 +447,19 @@ const recalculateTotalPrice = async (voucherObj?: any) => {
                 </View>
             </View>
             <View style ={{width:'100%', height:10, backgroundColor:'#E0DCDC', marginVertical:10, }}></View>
+            <View style={{width:'100%', padding: 10, backgroundColor:'#f5f6fa', borderRadius: 8, marginBottom: 10}}>
+              <Text style={{fontWeight:'bold', fontSize:16, marginBottom: 5}}>Ngày nhận/trả phòng</Text>
+              {selectedRoomsData.map((room, idx) => (
+                <View key={room.roomId + idx} style={{flexDirection:'row', alignItems:'center', marginBottom: 2}}>
+                  <Text style={{fontWeight:'600', color:'#176FF2'}}>{room.roomDetails.name}:</Text>
+                  <Text style={{marginLeft: 6}}>
+                    {formatRoomDate(new Date(room.roomDetails.checkinDate))} 
+                    <Text style={{color:'#888'}}>→</Text> 
+                    {formatRoomDate(new Date(room.roomDetails.checkoutDate))}
+                  </Text>
+                </View>
+              ))}
+            </View>
             <View style={styles.bookingcontainer}>
                 <Text style={styles.yourbooking}>Booking của bạn</Text>
                 <View style={styles.bookingTable}>
@@ -1072,5 +1087,41 @@ const styles = StyleSheet.create({
         color: '#222',
         textAlign: 'center',
         paddingHorizontal: 2,
+      },
+
+      // Thêm style cho phần hiển thị ngày nhận/trả phòng
+      dateInfoContainer: {
+        width: '100%',
+        padding: 12,
+        backgroundColor: '#F5F6FA',
+        borderRadius: 10,
+        marginTop: 10,
+        marginBottom: 0,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      },
+      dateInfoItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+      },
+      dateInfoIcon: {
+        width: 22,
+        height: 22,
+        marginRight: 8,
+      },
+      dateInfoLabel: {
+        fontWeight: 'bold',
+        fontSize: 16,
+      },
+      dateInfoValue: {
+        marginLeft: 6,
+        fontSize: 16,
+        color: '#2D9CDB',
+      },
+      dateInfoValueCheckout: {
+        marginLeft: 6,
+        fontSize: 16,
+        color: '#EB5757',
       },
 });

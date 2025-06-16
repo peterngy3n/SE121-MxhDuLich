@@ -24,7 +24,6 @@ import { API_BASE_URL } from "@/constants/config.js";
 const TopTab = createMaterialTopTabNavigator();
 
 function Posts({userId, navigation, route, refreshing }: any) {
-    console.log("UserID: ",userId);
     //const authCtx = useContext(AuthContext);
     const [fetching, setFetching] = useState(true);
     const [errorFetching, setErrorFetching] = useState(false);
@@ -68,7 +67,6 @@ function Posts({userId, navigation, route, refreshing }: any) {
                         const data = await response.json();
                         setUserPosts(data.data); 
                         //setImage(data.data?.userAvatar.url);
-                        console.log("userPost: ",data);
                     } else {
                         console.error('Failed to fetch user data:', response);
                     }

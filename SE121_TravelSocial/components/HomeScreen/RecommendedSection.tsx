@@ -92,7 +92,7 @@ const RecommendedSectionComponent = React.memo(function RecommendedSection({ cat
                     isJson = true;
                 } catch (jsonErr) {
                     const text = await response.text().catch(() => '');
-                    console.error('Popular API JSON parse error:', jsonErr, text);
+                    console.log('Popular API JSON parse error:', jsonErr, text);
                     setHasMore(false);
                     setLoading(false);
                     setIsFetchingMore(false);

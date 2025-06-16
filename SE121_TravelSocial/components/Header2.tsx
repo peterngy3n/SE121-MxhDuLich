@@ -30,7 +30,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     backgroundColor: '#ffffff',
     paddingHorizontal: 100,
-    paddingVertical: 40,
+    paddingVertical: 15,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,

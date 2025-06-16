@@ -99,7 +99,6 @@ export default function CollectionScreen ()
 
       const fetchCollections = async () => {
         try {
-          console.log(userId);
           const response = await fetch(`${API_BASE_URL}/collection/getbyuserid/${userId}`); 
           const result = await response.json();
     
@@ -113,13 +112,12 @@ export default function CollectionScreen ()
                 previewImageUrl,
               };
             });
-            console.log('updatedCollections: ', updatedCollections);
             setCollections(updatedCollections);
           } else {
             //console.error('Error fetching collections:', result.error);
           }
         } catch (error) {
-          console.error('Error fetching collections:', error);
+          console.log('Error fetching collections:', error);
         } finally {
           setLoading(false); // Dữ liệu đã được tải, cập nhật trạng thái loading
         }

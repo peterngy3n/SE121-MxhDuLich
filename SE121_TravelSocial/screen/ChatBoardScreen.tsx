@@ -4,7 +4,6 @@ import { NativeStackNavigatorProps } from 'react-native-screens/lib/typescript/n
 import axios from 'axios';
 import { API_BASE_URL } from '@/constants/config';
 import { useUser } from '@/context/UserContext';
-import io, { Socket } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSocket } from '@/context/SocketContext';
 

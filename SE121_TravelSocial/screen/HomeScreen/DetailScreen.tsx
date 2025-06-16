@@ -207,7 +207,6 @@ const facilityIcons: FacilityIcons = {
     }, [userId, id]);
 
     useEffect(() => {
-      console.log(locationDetails?.address)
       if (locationDetails?.address) {
           getCoordinatesFromAddress(locationDetails?.address);
       }
@@ -242,7 +241,6 @@ const storeLocationDetails = async (data: any) => {
     const jsonValue = JSON.stringify(data);
     await AsyncStorage.setItem('@location_details', jsonValue);
     await AsyncStorage.setItem('lastViewedLocationId', data._id); // Lưu ID địa điểm đã xem gần nhất
-    console.log('Location details saved to local storage.', jsonValue);
   } catch (e) {
     console.error('Error saving location details:', e);
   }
@@ -253,7 +251,6 @@ const storeLocationDetails = async (data: any) => {
         const response = await fetch(`${API_BASE_URL}/locationbyid/${id}`);
         const data = await response.json();
         if (data.isSuccess) {
-          console.log('Location details:', data.data);
           setLocationDetails(data.data);
           await storeLocationDetails(data.data);
         } else {
@@ -266,16 +263,13 @@ const storeLocationDetails = async (data: any) => {
 
     const fetchRoomServices = async (locationId: string) => {
       try {
-        console.log('locationid: ',locationId);
         const response = await fetch(`${API_BASE_URL}/room/getbylocationid/${locationId}`);
         const result = await response.json();
     
         if (result.isSuccess && result.data) {
           
           // Lấy danh sách dịch vụ từ tất cả các phòng
-          console.log('room',result.data);
           const allServices = result.data.flatMap((room: any) => room.facility || []);
-          console.log('service: ',allServices);
           const uniqueServices = Array.from(new Set(allServices.map((service: any) => service.id)))
                                   .map((id) => {
                                     return allServices.find((service: any) => service.id === id); // Lấy thông tin dịch vụ
@@ -371,7 +365,6 @@ const storeLocationDetails = async (data: any) => {
     };
 
     const renderImage = ({ item }: { item: { _id: string; url: string } }) => (
-      console.log('image:', item.url),
       <Image
         
         source={{ uri: item.url }}

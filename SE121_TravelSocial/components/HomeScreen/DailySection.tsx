@@ -87,7 +87,6 @@ const DailySectionComponent = React.memo(function DailySection({ categoryId, nav
             } else {
                 url += `?top_n=10`;
             }
-            console.log('Fetching realtime recommendations from:', url);
             const response = await fetchWithTimeout(url, {}, 10000); // 10s timeout
             // Đảm bảo response là Response trước khi gọi .json()
             if (!(response instanceof Response)) {

@@ -16,11 +16,24 @@ const updateStatusBooking = async (bookingId, amountPayed) => {
     if(!booking)
         throw new NotFoundException('Cannot found booking to calculate')
     booking.amountPaid = amountPayed
+    // Kiểm tra nếu ngày checkout bằng ngày hiện tại thì cập nhật trạng thái thành finish
+    if (booking.checkoutDate) {
+        const today = new Date();
+        const checkout = new Date(booking.checkoutDate);
+        // So sánh ngày/tháng/năm
+        if (
+            checkout.getFullYear() === today.getFullYear() &&
+            checkout.getMonth() === today.getMonth() &&
+            checkout.getDate() === today.getDate()
+        ) {
+            booking.status = 'complete';
+        }
+    }
     await booking.save()
 }
 
 const getAllBooking = async () => {
-    const result = await Booking.find()
+    const result = await Booking.find().sort({ dateBooking: -1 });
     if(result.length !== 0)
         return result
     else
@@ -45,7 +58,7 @@ const getBookingById = async (id) => {
 }
 
 const getBookingByUserId = async (userId) => {
-    const result = await Booking.find({userId : userId})
+    const result = await Booking.find({userId : userId}).sort({ dateBooking: -1 })
     if(result.length !== 0)
         return result
     else

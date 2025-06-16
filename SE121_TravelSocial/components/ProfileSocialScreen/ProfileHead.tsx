@@ -152,7 +152,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
                 <PressEffect>
                   <Pressable
                     onPress={() => {
-                      navigation.navigate("chat-screen");
+                      // navigation.navigate("chat-screen");
                     }}
                   >
                     <Image

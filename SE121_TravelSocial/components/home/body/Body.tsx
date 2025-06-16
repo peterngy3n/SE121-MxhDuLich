@@ -16,7 +16,7 @@ const Body = ({ StoryTranslate }: any) => {
         if (jsonValue !== null) {
           const user = JSON.parse(jsonValue);
           setUserData(user);
-          console.log(user);
+          
         }
       } catch (e) {
         

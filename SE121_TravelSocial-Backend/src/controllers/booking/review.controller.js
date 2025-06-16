@@ -48,17 +48,17 @@ module.exports.getReviewByLocationId = async (req, res, next) => {
 module.exports.createReview = async (req, res, next) => {
     try {
         console.log("BODY: ",req.body)
-        const {locationId, rating, review} = req.body
-        const images = req.files ? req.files.map((file) => ({
-            url: file.path,
-            publicId: file.filename,
-        })) : [];
+        const {locationId, rating, review, image} = req.body
+        // const images = req.files ? req.files.map((file) => ({
+        //     url: file.path,
+        //     publicId: file.filename,
+        // })) : [];
         const reviewData = new Review({
             locationId: locationId,
             senderId: res.locals.user._id,
             rating: rating,
             review: review,
-            image: images,
+            image: image,
         })
         const result = await reviewSvc.createReview(reviewData)
         res.status(200).json({

@@ -29,7 +29,6 @@ function ProfileSocialScreen({ navigation, route }: any) {
         if (jsonValue !== null) {
           const user = JSON.parse(jsonValue);
           setUser(user);
-          console.log("id",user._id);
         }
       } catch (e) {
         
