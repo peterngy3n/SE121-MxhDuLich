@@ -9,6 +9,7 @@ import React from "react";
 import Header2 from "@/components/Header2";
 import { API_BASE_URL } from "@/constants/config";
 import { useUser } from '@/context/UserContext';
+import { useSocket } from '@/context/SocketContext';
 
 // Định nghĩa kiểu dữ liệu cho thông báo
 interface Notification {
@@ -31,6 +32,7 @@ interface Notification {
 
 export default function NotificationsScreen({ navigation, route }: any) {
   const { userId } = useUser();
+  const { onNotification } = useSocket();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -154,6 +156,18 @@ export default function NotificationsScreen({ navigation, route }: any) {
       },
     });
   }, []);
+
+  // Lắng nghe notification realtime
+  useEffect(() => {
+    if (!onNotification) return;
+    const handleRealtimeNotification = (data: any) => {
+      if (data && data.notification) {
+        setNotifications(prev => [data.notification, ...prev]);
+      }
+    };
+    onNotification(handleRealtimeNotification);
+    // Không cần cleanup vì context đã xử lý
+  }, [onNotification]);
 
   // Render từng thông báo tùy theo loại
   const renderItem = ({ item }: { item: Notification }) => (

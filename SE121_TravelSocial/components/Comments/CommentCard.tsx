@@ -1,4 +1,4 @@
-import { Image, StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import React, { useEffect, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { GlobalStyles } from "../../constants/Styles";
@@ -16,10 +16,12 @@ interface CommentCardProps {
       };
     };
     images?: Array<{url: string}>;
+    parentId?: string | null;
   };
+  onReply: () => void;
 }
 
-function CommentCard({ comment }: CommentCardProps) {
+function CommentCard({ comment, onReply }: CommentCardProps) {
       const [safeUri, setSafeUri] = useState<string>("");
       const [ratio, setRatio] = useState(1);
   // Format thời gian tương đối
@@ -84,8 +86,11 @@ function CommentCard({ comment }: CommentCardProps) {
     return require('../../assets/no-photo.jpg');
   };
 
+  // Check if this is a reply comment
+  const isReply = comment.parentId != null;
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isReply && styles.replyContainer]}>
       <View style={{ flexDirection: "row" }}>
         <Image
           source={getAvatarUrl()}
@@ -133,6 +138,17 @@ function CommentCard({ comment }: CommentCardProps) {
               }}
             />
           )}
+
+          {/* Reply button */}
+          <View style={styles.actionContainer}>
+            <TouchableOpacity 
+              style={styles.replyButton}
+              onPress={onReply}
+            >
+              <Ionicons name="return-down-back-outline" size={16} color={GlobalStyles.colors.primary500} />
+              <Text style={styles.replyButtonText}>Trả lời</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </View>
@@ -151,5 +167,25 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
+  },
+  replyContainer: {
+    marginLeft: 40, // Indent replies
+    backgroundColor: GlobalStyles.colors.primary200, // Different background for replies
+  },
+  actionContainer: {
+    flexDirection: 'row',
+    marginTop: 10,
+  },
+  replyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 2,
+    paddingHorizontal: 5,
+    borderRadius: 10,
+  },
+  replyButtonText: {
+    fontSize: 12,
+    color: GlobalStyles.colors.primary500,
+    marginLeft: 5,
   },
 });

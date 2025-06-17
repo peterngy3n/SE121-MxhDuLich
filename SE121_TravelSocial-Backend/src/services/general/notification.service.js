@@ -2,10 +2,11 @@ const mongoose = require('mongoose');
 const { NotFoundException } = require('../../errors/exception');
 
 /**
- * Tạo thông báo mới
+ * Tạo thông báo mới và emit socket event nếu có io
  * @param {Object} notificationData - Dữ liệu thông báo
+ * @param {Object} [io] - Socket.IO server instance (optional)
  */
-const createNotification = async (notificationData) => {
+const createNotification = async (notificationData, io = null) => {
     try {
         // Kiểm tra xem model đã được định nghĩa chưa
         let Notification;
@@ -56,6 +57,16 @@ const createNotification = async (notificationData) => {
 
         const notification = new Notification(notificationData);
         await notification.save();
+
+        // Emit socket event nếu có io (realtime notification)
+        if (io && notificationData.recipient) {
+            // Gửi vào room notification riêng biệt (user_notification_{userId})
+            const roomId = `user_notification_${notificationData.recipient}`;
+            io.to(roomId).emit('new-notification', {
+                type: notificationData.type,
+                notification: notification.toObject(),
+            });
+        }
         return notification;
     } catch (error) {
         console.error('Error creating notification:', error);
@@ -215,6 +226,33 @@ const createFollowNotification = async (followerId, userId) => {
 };
 
 /**
+ * Tạo thông báo khi có người bình luận vào bài viết
+ * @param {String} commenterId - ID người bình luận
+ * @param {String} postOwnerId - ID chủ bài viết
+ * @param {String} postId - ID bài viết
+ * @param {Object} [io] - Socket.IO server instance (optional)
+ */
+const createCommentNotification = async (commenterId, postOwnerId, postId, io = null) => {
+    try {
+        // Không tạo thông báo nếu người bình luận chính là chủ bài viết
+        if (commenterId.toString() === postOwnerId.toString()) {
+            return null;
+        }
+        return await createNotification({
+            type: 'COMMENT',
+            sender: commenterId,
+            recipient: postOwnerId,
+            postId: postId,
+            status: 'accepted' // Comment notifications are always accepted
+        }, io);
+    } catch (error) {
+        console.error('Error creating comment notification:', error);
+        // Suppress error, notification is not critical
+        return null;
+    }
+};
+
+/**
  * Xóa thông báo kết bạn khi hủy lời mời
  * @param {String} senderId - ID người gửi lời mời
  * @param {String} recipientId - ID người nhận lời mời
@@ -245,5 +283,6 @@ module.exports = {
     deleteNotification,
     createFriendRequestNotification,
     createFollowNotification,
+    createCommentNotification,
     deleteFriendRequestNotification
 };

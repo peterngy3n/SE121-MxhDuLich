@@ -1,0 +1,12 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Start SE121_TravelSocial App",
+			"type": "shell",
+			"command": "cd c:\\Users\\Admin\\source\\repos\\DA1\\SE121_TravelSocial && npm start",
+			"isBackground": true,
+			"problemMatcher": []
+		}
+	]
+}

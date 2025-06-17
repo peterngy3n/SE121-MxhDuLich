@@ -12,6 +12,8 @@ interface SocketContextType {
   joinUserRoom: (userId: string) => Promise<void>;
   joinConversationRoom: (conversationId: string) => Promise<void>;
   leaveConversationRoom: (conversationId: string) => Promise<void>;
+  // Thêm hàm đăng ký callback nhận notification realtime
+  onNotification?: (cb: (notification: any) => void) => void;
 }
 
 const SocketContext = createContext<SocketContextType | undefined>(undefined);
@@ -31,6 +33,8 @@ interface SocketProviderProps {
 export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  // State lưu callback notification
+  const [notificationCallback, setNotificationCallback] = useState<((notification: any) => void) | null>(null);
 
   // Hàm khởi tạo socket (chỉ gọi khi đã đăng nhập)
   const initializeSocket = async () => {
@@ -182,6 +186,23 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     }
   };
 
+  // Hàm cho phép FE đăng ký callback nhận notification realtime
+  const onNotification = (cb: (notification: any) => void) => {
+    setNotificationCallback(() => cb);
+  };
+
+  // Lắng nghe event new-notification từ server
+  useEffect(() => {
+    if (!socket) return;
+    const handleNewNotification = (data: any) => {
+      if (notificationCallback) notificationCallback(data);
+    };
+    socket.on('new-notification', handleNewNotification);
+    return () => {
+      socket.off('new-notification', handleNewNotification);
+    };
+  }, [socket, notificationCallback]);
+
   return (
     <SocketContext.Provider value={{
       socket,
@@ -190,7 +211,8 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
       disconnectSocket,
       joinUserRoom,
       joinConversationRoom,
-      leaveConversationRoom
+      leaveConversationRoom,
+      onNotification
     }}>
       {children}
     </SocketContext.Provider>

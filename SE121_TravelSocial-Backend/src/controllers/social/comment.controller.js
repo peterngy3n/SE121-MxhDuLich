@@ -14,7 +14,8 @@ module.exports.createComment = async (req, res) => {
 
     console.log("Comment data::", commentData);
 
-    const result = await commentService.create(commentData);
+    // Truyền req.io vào service để hỗ trợ realtime notification
+    const result = await commentService.create(commentData, req.io);
     res.status(CREATED).json({
         isSuccess: true,
         result,

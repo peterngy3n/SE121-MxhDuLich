@@ -219,7 +219,7 @@ const facilityIcons: FacilityIcons = {
         //     Linking.openURL(url).catch(err => console.error("Không thể mở Google Maps", err));
         // } else {
         //     console.log('Tọa độ không khả dụng');
-        // }
+        //}
     };
 
     useEffect(() => {

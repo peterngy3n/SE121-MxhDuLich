@@ -4,9 +4,10 @@ const userModel = require("../../models/general/user.model");
 const commentModel = require("../../models/social/comment.model");
 const reactCommentModel = require("../../models/social/react-comment.model")
 const commentRepository = require("../../repository/comment.repository")
-const { NotFoundException } = require("../../errors/exception");
+const { NotFoundException, BadRequest } = require("../../errors/exception");
+const notificationService = require("../general/notification.service");
 
-const create = async (commentData) => {
+const create = async (commentData, io = null) => {
     const { content, postId, userId, 
         parentId, mention, images, videos } = commentData;
 
@@ -28,6 +29,10 @@ const create = async (commentData) => {
     });
 
     const savedComment = await comment.save();
+    
+    // Gửi thông báo cho chủ bài viết nếu người bình luận không phải là chủ bài viết
+    await notificationService.createCommentNotification(userId, post.authorId, postId, io);
+    
     return savedComment;
 };
 

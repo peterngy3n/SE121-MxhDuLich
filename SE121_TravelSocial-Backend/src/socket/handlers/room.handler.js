@@ -36,6 +36,9 @@ const listenJoinUserRoomHandler =  (io, socket) => {
 
         const roomId = `user_${userId}`
         socket.join(roomId)
+        // Join thêm room notification riêng biệt
+        const notificationRoom = `user_notification_${userId}`
+        socket.join(notificationRoom)
 
         listenJoinConversationRoomHandler(io, socket)
         
