@@ -25,6 +25,8 @@ import { Path, Svg } from "react-native-svg";
 import PressEffect from "../components/UI/PressEffect";
 import { API_BASE_URL } from "../constants/config";
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Header from "@/components/home/head/Header";
+import Header2 from "@/components/Header2";
 
 const { height, width } = Dimensions.get("window");
 
@@ -52,7 +54,7 @@ export default function PostDetailScreen({ navigation }: { navigation: NativeSta
   useEffect(() => {
     navigation.setOptions({
       title: "Chi tiết bài viết",
-      headerShown: true,
+      headerShown: false,
     });
     fetchPostDetail();
   }, []);
@@ -379,6 +381,7 @@ export default function PostDetailScreen({ navigation }: { navigation: NativeSta
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
     >
+      <Header2 title="Chi tiết bài viết"/>
       <ScrollView
         style={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
@@ -485,7 +488,9 @@ export default function PostDetailScreen({ navigation }: { navigation: NativeSta
               <Text style={styles.noCommentsText}>Chưa có bình luận nào</Text>
             ) : (
               comments.map((comment) => (
-                <CommentCard key={comment._id} comment={comment} />
+                <CommentCard key={comment._id} comment={comment} onReply={function (): void {
+                  throw new Error("Function not implemented.");
+                } } />
               ))
             )}
           </View>

@@ -7,9 +7,10 @@ import { useUser } from '../../context/UserContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width, height } = Dimensions.get('window')
-const CARD_WIDTH = width - 240;
-const CARD_HEIGHT = 200;
+const CARD_WIDTH = width - 80; // Tăng chiều rộng thẻ
+const CARD_HEIGHT = 240; // Tăng chiều cao thẻ
 const CARD_WIDTH_SPACING = CARD_WIDTH + 24;
+const PAGE_SIZE = 10; // Số lượng location hiển thị mỗi lần lazy load
 
 interface DailySectionProps {
     categoryId: string | undefined;
@@ -41,13 +42,16 @@ const DailySectionComponent = React.memo(function DailySection({ categoryId, nav
     // Sử dụng cacheRef ngoài component
     const cacheRef = dailySectionCacheRef;
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
+    const [allLocations, setAllLocations] = useState<Location[]>([]); // Lưu toàn bộ danh sách location
+    const [displayedLocations, setDisplayedLocations] = useState<Location[]>([]); // Danh sách location đang hiển thị
     
     useEffect(() => {
         // Nếu userId không đổi và đã có cache, dùng cache thay vì gọi API
         if (cacheRef.userId === userId && cacheRef.data.length > 0) {
-            setLocations(cacheRef.data);
+            setAllLocations(cacheRef.data);
+            setDisplayedLocations(cacheRef.data.slice(0, PAGE_SIZE));
             setLoading(false);
-            setHasMore(cacheRef.data.length > 0);
+            setHasMore(cacheRef.data.length > PAGE_SIZE);
             return;
         }
         getRealtimeRecommendations(1);
@@ -66,7 +70,7 @@ const DailySectionComponent = React.memo(function DailySection({ categoryId, nav
 
     const getRealtimeRecommendations = async (pageNumber: number) => {
         try {
-            setLoading(true);
+            setLoading(pageNumber === 1);
             setErrorMsg(null);
             // Kiểm tra kết nối mạng trước khi fetch
             const networkState = await Network.getNetworkStateAsync();
@@ -77,7 +81,6 @@ const DailySectionComponent = React.memo(function DailySection({ categoryId, nav
                 setIsFetchingMore(false);
                 return;
             }
-            // Gọi API Python realtime_recommend với user_id
             let url = `${API_RCM_URL}/realtime-recommend`;
             if (userId) {
                 url += `?user_id=${userId}`;
@@ -87,33 +90,50 @@ const DailySectionComponent = React.memo(function DailySection({ categoryId, nav
             } else {
                 url += `?top_n=10`;
             }
+            // Thêm phân trang nếu API hỗ trợ, ví dụ: &page=2
+            url += `&page=${pageNumber}`;
+
             const response = await fetchWithTimeout(url, {}, 10000); // 10s timeout
-            // Đảm bảo response là Response trước khi gọi .json()
             if (!(response instanceof Response)) {
                 throw new Error('Không nhận được phản hồi hợp lệ từ máy chủ.');
             }
             const data = await response.json();
             if (data.recommendations) {
-                let newLocations: Location[];
-                if (pageNumber === 1) {
-                    newLocations = data.recommendations;
-                    setLocations(newLocations);
-                } else {
-                    // Tránh trùng lặp
-                    const newItems = data.recommendations as Location[];
-                    newLocations = [
-                        ...locations,
-                        ...newItems.filter((item: Location) =>
-                            !(locations as Location[]).some(l => (l._id || l.location_id) === (item._id || item.location_id))
-                        )
-                    ];
-                    setLocations(newLocations);
+                const locationIds = data.recommendations.map((item: any) => item._id || item.location_id).filter(Boolean);
+                if (locationIds.length === 0) {
+                    if (pageNumber === 1) setLocations([]);
+                    setHasMore(false);
+                    setLoading(false);
+                    return;
                 }
-                // Cập nhật cache ngoài component
-                cacheRef.userId = userId || null;
-                cacheRef.data = newLocations;
-                setHasMore(data.recommendations.length > 0);
-                setPage(pageNumber + 1);
+                const promoRes = await fetchWithTimeout(
+                    `${API_BASE_URL}/locations-with-promotion-by-ids`,
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ locationIds })
+                    },
+                    10000
+                );
+                if (!(promoRes instanceof Response)) {
+                    throw new Error('Không nhận được phản hồi hợp lệ từ máy chủ (promotion).');
+                }
+                const promoData = await promoRes.json();
+                if (promoData.isSuccess && Array.isArray(promoData.data)) {
+                    const newLocations = promoData.data;
+                    setAllLocations(newLocations);
+                    setDisplayedLocations(newLocations.slice(0, PAGE_SIZE));
+                    setHasMore(newLocations.length > PAGE_SIZE);
+                } else {
+                    setAllLocations([]);
+                    setDisplayedLocations([]);
+                }
+                // Cập nhật cache ngoài component chỉ khi pageNumber === 1
+                if (pageNumber === 1) {
+                    cacheRef.userId = userId || null;
+                    cacheRef.data = promoData.data || [];
+                }
+                setPage(2); // Bắt đầu từ page 2 cho lazy load FE
             } else {
                 setHasMore(false);
             }
@@ -133,46 +153,78 @@ const DailySectionComponent = React.memo(function DailySection({ categoryId, nav
         }
     };
 
-    const loadMoreData = useCallback(() => {
-        if (!onEndReachedCalledDuringMomentum && !isFetchingMore && hasMore) {
-            getRealtimeRecommendations(page);
-            setOnEndReachedCalledDuringMomentum(true);
-        }
-    }, [page, isFetchingMore, hasMore, onEndReachedCalledDuringMomentum]);
+    // Hàm xử lý khi cuộn tới cuối danh sách (lazy load)
+    const handleLoadMore = () => {
+        if (isFetchingMore || !hasMore) return;
+        setIsFetchingMore(true);
+        setTimeout(() => {
+            const nextPage = page + 1;
+            const startIdx = (nextPage - 1) * PAGE_SIZE;
+            const endIdx = startIdx + PAGE_SIZE;
+            const nextLocations = allLocations.slice(startIdx, endIdx);
+            if (nextLocations.length > 0) {
+                setDisplayedLocations(prev => [...prev, ...nextLocations]);
+                setPage(nextPage);
+                setHasMore(allLocations.length > endIdx);
+            } else {
+                setHasMore(false);
+            }
+            setIsFetchingMore(false);
+        }, 300); // Giả lập delay
+    };
 
-    const renderItem = ({ item, index }: { item: Location, index: number }) => (
-        <TouchableOpacity
-            style={{
-                marginLeft: 24,
-                marginRight: index === locations.length - 1 ? 24 : 0,
-                marginBottom: 15,
-            }}
-            onPress={() => navigation.navigate('detail-screen', { id: item._id })}
-        >
-            <View style={styles.card}>
-                <View style={styles.imageBox}>
-                    <Image
-                        style={styles.image}
-                        source={
-                            item?.image?.[0]?.url
-                                ? { uri: item.image[0].url }
-                                : require('../../assets/images/bai-truoc-20.jpg')
-                        }
-                    />
+    const renderItem = ({ item, index }: { item: Location, index: number }) => {
+        const hasPromotion = Array.isArray(item.promotions) && item.promotions.length > 0;
+        const promotion = hasPromotion ? item.promotions[0] : null;
+        return (
+            <TouchableOpacity
+                style={{
+                    flex: 1,
+                    margin: 8, // Giảm margin để tiết kiệm không gian
+                    minWidth: CARD_WIDTH / 2,
+                    maxWidth: CARD_WIDTH,
+                }}
+                onPress={() => navigation.navigate('detail-screen', { id: item._id })}
+                activeOpacity={0.85}
+            >
+                <View style={styles.cardImproved}>
+                    <View style={styles.imageBoxImproved}>
+                        <Image
+                            style={styles.imageImproved}
+                            source={
+                                item?.image?.[0]?.url
+                                    ? { uri: item.image[0].url }
+                                    : require('../../assets/images/bai-truoc-20.jpg')
+                            }
+                        />
+                        {hasPromotion && (
+                            <View style={styles.promotionBadgeImproved}>
+                                <Image source={require('../../assets/icons/discount.png')} style={{width:16, height:16, marginRight:4}} />
+                                <Text style={styles.promotionTextImproved} numberOfLines={1}>
+                                    {promotion.name} {promotion.discount ? `- Giảm ${promotion.discount.amount}${promotion.discount.type === 'PERCENT' ? '%' : ' VND'}` : ''}
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+                    <View style={styles.infoBox}>
+                        <Text style={styles.locationName} numberOfLines={1}>{item?.name || 'Khách sạn mới'}</Text>
+                        <View style={styles.infoRow}>
+                            <Text style={styles.provinceText} numberOfLines={1}>{item?.province || 'Tỉnh/Thành phố'}</Text>
+                            <View style={styles.ratingBox}>
+                                <Image source={require('../../assets/icons/star.png')} style={styles.ratingIcon} />
+                                <Text style={styles.ratingText}>{typeof item?.rating === 'number' ? item.rating.toFixed(1) : '--'}</Text>
+                            </View>
+                        </View>
+                        <View style={styles.infoRow}>
+                            <Text style={styles.priceText}>
+                                {typeof item?.minPrice === 'number' ? item.minPrice.toLocaleString('vi-VN') + ' VND' : 'Giá không xác định'}
+                            </Text>
+                        </View>
+                    </View>
                 </View>
-                <View style={styles.footer}>
-                    <Text style={[styles.textStyle, { fontSize: 16 }]}>
-                        {item?.name || 'Khách sạn mới'}
-                    </Text>
-                </View>
-                <View style={styles.footer}>
-                    <Text style={[styles.textStyle, { fontSize: 12 }]}>
-                        {item?.province || 'Tỉnh/Thành phố'}
-                    </Text>
-                </View>
-            </View>
-        </TouchableOpacity>
-    );
+            </TouchableOpacity>
+        );
+    };
 
     if (loading && locations.length === 0) {
         return (
@@ -200,7 +252,7 @@ const DailySectionComponent = React.memo(function DailySection({ categoryId, nav
             <Text style={styles.titleText}>Gợi ý hằng ngày</Text>
             <FlatList
                 ref={flatListRef}
-                data={locations}
+                data={displayedLocations}
                 horizontal={false}
                 showsHorizontalScrollIndicator={false}
                 keyExtractor={(item, index) =>
@@ -211,7 +263,7 @@ const DailySectionComponent = React.memo(function DailySection({ categoryId, nav
                 contentContainerStyle={styles.container}
                 renderItem={renderItem}
                 numColumns={2}
-                onEndReached={loadMoreData}
+                onEndReached={handleLoadMore}
                 onMomentumScrollBegin={() => setOnEndReachedCalledDuringMomentum(false)}
                 onEndReachedThreshold={0.2}
                 ListFooterComponent={
@@ -238,7 +290,7 @@ export default DailySectionComponent;
 
 const styles = StyleSheet.create({
     container: {
-        paddingHorizontal: 5,
+        paddingHorizontal: 10, // Giảm padding ngang
         paddingBottom: 20,
     },
     titleText: {
@@ -247,38 +299,94 @@ const styles = StyleSheet.create({
         left: 20,
         marginBottom: 10,
     },
-    card: {
-        width: CARD_WIDTH,
-        height: CARD_HEIGHT,
-        borderRadius: 1,
-    },
-    imageBox: {
-        width: CARD_WIDTH,
-        height: CARD_HEIGHT - 60,
-        borderRadius: 24,
+    cardImproved: {
+        backgroundColor: '#fff',
+        borderRadius: 18, // Tăng nhẹ border radius
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.12,
+        shadowRadius: 8,
+        elevation: 4,
+        marginBottom: 10, // Tăng margin dưới một chút
         overflow: 'hidden',
     },
-    image: {
-        width: CARD_WIDTH,
-        height: CARD_HEIGHT - 60,
+    imageBoxImproved: {
+        width: '100%',
+        height: CARD_HEIGHT - 70,
+        borderTopLeftRadius: 18,
+        borderTopRightRadius: 18,
+        overflow: 'hidden',
+        backgroundColor: '#f2f2f2',
+    },
+    imageImproved: {
+        width: '100%',
+        height: '100%',
         resizeMode: 'cover',
     },
-    textBox: {
+    infoBox: {
+        padding: 12,
+    },
+    locationName: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#222',
+        marginBottom: 4,
+    },
+    infoRow: {
         flexDirection: 'row',
-        backgroundColor: '#4D5652',
-        borderRadius: 20,
         alignItems: 'center',
-        height: 30,
-    },
-    textStyle: {
-        marginTop: 6,
-        fontWeight: 'medium',
-        color: 'black',
-        marginLeft: 5,
-        marginVertical: 2,
-    },
-    footer: {
-        flexDirection: 'row',
         justifyContent: 'space-between',
-    }
+        marginBottom: 2,
+    },
+    provinceText: {
+        fontSize: 13,
+        color: '#666',
+        flex: 1,
+    },
+    ratingBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginLeft: 8,
+    },
+    ratingIcon: {
+        width: 15,
+        height: 15,
+        marginRight: 2,
+    },
+    ratingText: {
+        fontSize: 13,
+        color: '#B8860B',
+        fontWeight: 'bold',
+    },
+    priceText: {
+        fontSize: 15,
+        color: '#176FF2',
+        fontWeight: 'bold',
+    },
+    promotionBadgeImproved: {
+        position: 'absolute',
+        top: 10,
+        left: 10,
+        backgroundColor: '#FFF9C4',
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 8,
+        zIndex: 2,
+        maxWidth: '90%',
+        shadowColor: '#FFD700',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 4,
+    },
+    promotionTextImproved: {
+        color: '#B22222',
+        fontWeight: 'bold',
+        fontSize: 13,
+        flexShrink: 1,
+    },
 })

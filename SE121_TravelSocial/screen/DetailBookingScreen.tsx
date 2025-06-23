@@ -430,6 +430,12 @@ export default function DetailBookingScreen({ navigation }: {navigation: NativeS
                     <Text style={styles.boxText3}>Hủy</Text>
                   </TouchableOpacity>
                 </View>
+                                <View style={{ alignItems:'center', justifyContent:'center',alignContent:'center',width:'100%', marginTop: 10}}>
+
+                <TouchableOpacity style={styles.addpaymentmethod2} onPress={() => navigation.navigate('main-screen')}>
+                                <Text style={styles.payButtonText}>Về trang chủ</Text>
+                            </TouchableOpacity>
+                            </View>
               </View>
             </ScrollView>
         </View>  
@@ -754,6 +760,30 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         minWidth: 100,
         textAlign: 'right',
+    },
+     payButton: {
+        backgroundColor: '#176FF2',
+        borderRadius: 12,
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginVertical: 8,
+        width: '90%',
+        alignSelf: 'center',
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 4,
+        },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 5,
+    },
+    payButtonText: {
+        color: '#fff',
+        fontWeight: 'bold',
+        fontSize: 18,
     },
 });
 

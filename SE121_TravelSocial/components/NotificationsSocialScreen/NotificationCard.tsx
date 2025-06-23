@@ -20,14 +20,20 @@ interface NotificationCardProps {
     };
     createdAt: string;
     status?: string;
-    postId?: string;
+    postId?: {
+    _id: string;
+    title?: string;
+    content?: string;
+    images?: Array<{ url: string }>;
+    }
     postImage?: string;
   };
   onAccept?: () => void;
   onReject?: () => void;
+  onPress?: () => void; // Thêm prop onPress
 }
 
-export default function NotificationCard({ mode = "LIKE", data, onAccept, onReject }: NotificationCardProps) {
+export default function NotificationCard({ mode = "LIKE", data, onAccept, onReject, onPress }: NotificationCardProps) {
     // Format thời gian
     const formatTime = (timeString: string) => {
       try {
@@ -41,7 +47,12 @@ export default function NotificationCard({ mode = "LIKE", data, onAccept, onReje
     // Nếu có dữ liệu thực, hiển thị dữ liệu đó
     if (data) {
         return (
-            <View style={styles.container}>
+            <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={onPress}
+                disabled={!onPress}
+                style={styles.container}
+            >
                 <View style={{ flexDirection: "row", width: mode === "FRIEND_REQUEST" ? "50%" : "70%" }}>
                     <Image
                         source={{ 
@@ -100,7 +111,7 @@ export default function NotificationCard({ mode = "LIKE", data, onAccept, onReje
                         </TouchableOpacity>
                     </View>
                 )}
-            </View>
+            </TouchableOpacity>
         );
     }
 

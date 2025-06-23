@@ -9,15 +9,23 @@ import { API_BASE_URL } from '@/constants/config';
 import axios from 'axios';
 import { useSocket } from '@/context/SocketContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from '@expo/vector-icons';
+import { GlobalStyles } from '@/constants/Styles';
 
 type ReservationRouteProp = RouteProp<RootStackParamList,'chat-screen'>;
+
+interface ImageObject {
+  url: string;
+  publicId: string;
+}
 
 interface Message {
   _id: string;
   conversationId: string;
   senderId?: string;
   message: string;
-  images: string[];
+  images: ImageObject[];
   videos: string[];
   createdAt: string;
   updatedAt: string;
@@ -38,6 +46,8 @@ export default function ChatScreen({ navigation }: {navigation: NativeStackNavig
   const [newMessage, setNewMessage] = useState('');
   const [loadingMessages, setLoadingMessages] = useState(true);
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const { socket, isConnected, joinConversationRoom, leaveConversationRoom } = useSocket();
 
@@ -188,12 +198,69 @@ export default function ChatScreen({ navigation }: {navigation: NativeStackNavig
     }
   }, [messages]);
 
+  // Hàm chọn ảnh
+  const pickImage = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets[0].uri) {
+      setSelectedImage(result.assets[0].uri);
+    }
+  };
+
+  // Hàm upload ảnh lên server (giả định API /upload trả về { isSuccess, data: [{ url, publicId }] })
+  const uploadImage = async (imageUri: string): Promise<ImageObject | null> => {
+    try {
+      setUploadingImage(true);
+      const formData = new FormData();
+      const uriParts = imageUri.split('/');
+      const name = uriParts[uriParts.length - 1];
+      formData.append('files', {
+        uri: imageUri,
+        type: 'image/jpeg',
+        name,
+      } as any);
+      const token = await AsyncStorage.getItem('token');
+      const bearerToken = token ? `Bearer ${token}` : '';
+      const response = await fetch(`${API_BASE_URL}/upload`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          'Authorization': bearerToken,
+        },
+      });
+      const resJson = await response.json();
+      if (resJson.isSuccess && resJson.data && resJson.data[0]) {
+        // Đảm bảo trả về object { url, publicId }
+        return {
+          url: resJson.data[0].url || resJson.data[0].secure_url || resJson.data[0],
+          publicId: resJson.data[0].publicId || resJson.data[0].public_id || '',
+        };
+      }
+      return null;
+    } catch (e) {
+      Alert.alert('Lỗi', 'Không thể upload ảnh');
+      return null;
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   // Gửi tin nhắn mới
   const handleSend = async () => {
-    if (newMessage.trim() === '' || sendingMessage) return;
-
-    const messageText = newMessage.trim();
+    if ((newMessage.trim() === '' && !selectedImage) || sendingMessage) return;
     setSendingMessage(true);
+    let imageObjs: ImageObject[] = [];
+    if (selectedImage) {
+      const imgObj = await uploadImage(selectedImage);
+      if (imgObj) imageObjs.push(imgObj);
+      console.log('Uploaded image object:', imgObj);
+    }
+    const messageText = newMessage.trim();
     
     // Tạo tin nhắn tạm thời cho optimistic update
     const tempMessage: Message = {
@@ -201,7 +268,7 @@ export default function ChatScreen({ navigation }: {navigation: NativeStackNavig
       conversationId: conversationId,
       senderId: userId?.toString(),
       message: messageText,
-      images: [],
+      images: imageObjs,
       videos: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -211,6 +278,7 @@ export default function ChatScreen({ navigation }: {navigation: NativeStackNavig
     // Thêm tin nhắn tạm thời vào UI ngay lập tức
     setMessages(prevMessages => [...prevMessages, tempMessage]);
     setNewMessage('');
+    setSelectedImage(null);
 
     try {
       // Lấy token để gửi kèm request
@@ -222,7 +290,7 @@ export default function ChatScreen({ navigation }: {navigation: NativeStackNavig
         conversationId: conversationId,
         senderId: userId,
         message: messageText,
-        images: [],
+        images: imageObjs,
         videos: []
       }, {
         headers: {
@@ -244,16 +312,14 @@ export default function ChatScreen({ navigation }: {navigation: NativeStackNavig
         setMessages(prevMessages => 
           prevMessages.filter(msg => msg._id !== tempMessage._id)
         );
-        Alert.alert("Lỗi", "Không thể gửi tin nhắn");
+        Alert.alert('Lỗi', 'Không thể gửi tin nhắn');
       }
     } catch (error) {
-      console.error("Lỗi gửi tin nhắn:", error);
-      // Xóa tin nhắn tạm thời nếu có lỗi
       setMessages(prevMessages => 
         prevMessages.filter(msg => msg._id !== tempMessage._id)
       );
-      setNewMessage(messageText); // Đặt lại text vào input
-      Alert.alert("Lỗi", "Không thể gửi tin nhắn. Vui lòng thử lại.");
+      setNewMessage(messageText);
+      Alert.alert('Lỗi', 'Không thể gửi tin nhắn. Vui lòng thử lại.');
     } finally {
       setSendingMessage(false);
     }
@@ -262,7 +328,15 @@ export default function ChatScreen({ navigation }: {navigation: NativeStackNavig
   // Render mỗi tin nhắn
   const renderMessageItem = ({ item }: { item: Message }) => {
     const isCurrentUser = item.senderId === userId?.toString();
-    
+    // Hỗ trợ cả định dạng cũ (string[]) và mới (object[])
+    let imageUrl: string | undefined = undefined;
+    if (item.images && item.images.length > 0) {
+      if (typeof item.images[0] === 'string') {
+        imageUrl = item.images[0] as string;
+      } else if (typeof item.images[0] === 'object' && item.images[0]?.url) {
+        imageUrl = (item.images[0] as ImageObject).url;
+      }
+    }
     return (
       <View style={[
         styles.messageContainer,
@@ -272,6 +346,13 @@ export default function ChatScreen({ navigation }: {navigation: NativeStackNavig
           styles.messageBubble,
           isCurrentUser ? styles.currentUserBubble : styles.otherUserBubble
         ]}>
+          {imageUrl && (
+            <Image
+              source={{ uri: imageUrl }}
+              style={{ width: 180, height: 120, borderRadius: 10, marginBottom: 5 }}
+              resizeMode="cover"
+            />
+          )}
           <Text style={[
             styles.messageText,
             isCurrentUser ? styles.currentUserText : styles.otherUserText
@@ -348,6 +429,11 @@ export default function ChatScreen({ navigation }: {navigation: NativeStackNavig
 
       {/* Khu vực nhập tin nhắn */}
       <View style={styles.textInputContainer}>
+        <TouchableOpacity onPress={pickImage} style={{ marginRight: 8, bottom: 4 }}>
+          <Ionicons name="image-outline" size={24} color={GlobalStyles.colors.primary500} />
+
+          {/* <Image source={require('../assets/icons/plus.png')} style={{ width: 28, height: 28, tintColor: '#196EEE' }} /> */}
+        </TouchableOpacity>
         <TextInput
           style={styles.textInput}
           placeholder="Nhập tin nhắn..."
@@ -360,49 +446,26 @@ export default function ChatScreen({ navigation }: {navigation: NativeStackNavig
         <TouchableOpacity 
           style={[styles.sendButton, sendingMessage && styles.sendButtonDisabled]} 
           onPress={handleSend}
-          disabled={sendingMessage || newMessage.trim() === ''}
+          disabled={sendingMessage || (newMessage.trim() === '' && !selectedImage)}
         >
-          {sendingMessage ? (
+          {sendingMessage || uploadingImage ? (
             <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
             <Image source={require('../assets/icons/send.png')} style={styles.sendIcon} />
           )}
         </TouchableOpacity>
       </View>
+      {selectedImage && (
+        <View style={{ alignItems: 'center', marginBottom: 8 }}>
+          <Image source={{ uri: selectedImage }} style={{ width: 120, height: 80, borderRadius: 8 }} />
+          <TouchableOpacity onPress={() => setSelectedImage(null)}>
+            <Text style={{ color: 'red', marginTop: 4 }}>Xóa ảnh</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </KeyboardAvoidingView>
   );
 }
-//     return (
-
-//         <View style={styles.container}>
-//           <View style={styles.header}>
-//             <TouchableOpacity style={styles.arrowleftbutton} onPress={() => navigation.goBack()}>
-//               <Image source={require('../assets/icons/arrowleft.png')} style={styles.arrowlefticon} />
-//             </TouchableOpacity>
-//             <View style ={{flexDirection:'row', alignItems:'center', alignContent:'center',justifyContent:'center', }}>
-//                 <View style={styles.avatarContainer}>
-//                     <Image source={require('../assets/images/avt.png')} style={styles.avatar} />
-//                 </View>
-//                 <View>
-//                     <Text style={{fontSize:18,fontWeight:'bold',}}>{userName}</Text>
-//                 </View>
-//             </View>
-//           </View>
-
-//           <View style={styles.textInputContainer}>
-//                 <TextInput
-//                     style={[styles.textInput]}
-//                     placeholder="Nhập tin nhắn"
-//                     placeholderTextColor="#000000"
-                    
-//                 />
-//                 <TouchableOpacity style={styles.sendButton} onPress={() => console.log('Send icon pressed')}>
-//                     <Image source={require('../assets/icons/send.png')} style={styles.sendIcon} />
-//                 </TouchableOpacity>
-//           </View>
-         
-//         </View>
-// );
 
 const styles = StyleSheet.create({
   container: {

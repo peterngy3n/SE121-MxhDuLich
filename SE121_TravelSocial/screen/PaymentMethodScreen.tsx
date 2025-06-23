@@ -53,6 +53,7 @@ export default function PaymentMethodScreen({ navigation }: { navigation: Native
                 body: JSON.stringify({ bookingId }), // clientIp có thể lấy từ backend nếu cần
             });
             const data = await res.json();
+            console.log('Payment URL response:', data);
             if (data.isSuccess && data.data) {
                 setPaymentUrl(data.data);
             } else {
@@ -244,7 +245,7 @@ export default function PaymentMethodScreen({ navigation }: { navigation: Native
                             setShowSuccessModal(true);
                             setTimeout(() => {
                                 setShowSuccessModal(false);
-                                navigation.navigate('main-screen');
+                                navigation.navigate('detail-booking-screen', { bookingId });
                             }, 2000);
                         }
                     }}
@@ -255,7 +256,10 @@ export default function PaymentMethodScreen({ navigation }: { navigation: Native
                         <View style={styles.successModalContent}>
                             <Image source={require('../assets/icons/success.png')} style={{ width: 64, height: 64, marginBottom: 16 }} />
                             <Text style={styles.successTitle}>Thanh toán thành công!</Text>
-                            <Text style={styles.successText}>Bạn sẽ được chuyển về trang chính...</Text>
+                            <Text style={styles.successText}>Bạn sẽ được chuyển về chi tiết booking...</Text>
+                            <TouchableOpacity style={[styles.payButton, {marginTop: 20}]} onPress={() => navigation.navigate('main-screen')}>
+                                <Text style={styles.payButtonText}>Về trang chủ</Text>
+                            </TouchableOpacity>
                         </View>
                     </View>
                 )}
@@ -371,7 +375,10 @@ export default function PaymentMethodScreen({ navigation }: { navigation: Native
                         <View style={styles.successModalContent}>
                             <Image source={require('../assets/icons/success.png')} style={{ width: 64, height: 64, marginBottom: 16 }} />
                             <Text style={styles.successTitle}>Thanh toán thành công!</Text>
-                            <Text style={styles.successText}>Bạn sẽ được chuyển về trang chính...</Text>
+                            <Text style={styles.successText}>Bạn sẽ được chuyển về chi tiết booking...</Text>
+                            <TouchableOpacity style={[styles.payButton, {marginTop: 20}]} onPress={() => navigation.navigate('main-screen')}>
+                                <Text style={styles.payButtonText}>Về trang chủ</Text>
+                            </TouchableOpacity>
                         </View>
                     </View>
                 )}

@@ -277,14 +277,22 @@ const DetailBookingScreen = () => {
                           "DD/MM/YYYY HH:mm:ss"
                         )}
                       </div>
-                      <div class="mb-2 text-gray-500">Tổng tiền</div>
-                      <div class="mb-4">{booking?.totalPriceAfterTax}</div>
-                      {/* <div class="mb-2 text-gray-500">Tên liên hệ</div>
-                                                          <div class="mb-4">{userData?.userName}</div>
-                                                          <div class="mb-2 text-gray-500">Giới tính</div>
-                                                          <div className="mb-4">
-                                                              {userData?.gender === 'male' ? 'Nam' : 'Nữ'}
-                                                          </div> */}
+                      <div class="mb-2 text-gray-500">Tổng tiền gốc</div>
+                      <div class="mb-4">{formatCurrency(Number(booking?.totalPrice))}</div>
+                      <div class="mb-2 text-gray-500">Khuyến mãi (Sự kiện địa điểm)</div>
+                      <div class="mb-4 text-green-600">-
+                        {formatCurrency(Number(booking?.promotionDiscount || 0))}
+                      </div>
+                      <div class="mb-2 text-gray-500">Voucher giảm giá</div>
+                      <div class="mb-4 text-green-600">-
+                        {formatCurrency(Number(booking?.voucherDiscount || 0))}
+                      </div>
+                      <div class="mb-2 text-gray-500 font-bold">Tổng tiền sau giảm giá</div>
+                      <div class="mb-4 font-bold text-blue-600">
+                        {formatCurrency(Number(booking?.totalPriceAfterDiscount || (booking?.totalPrice - (booking?.promotionDiscount || 0) - (booking?.voucherDiscount || 0))))}
+                      </div>
+                      <div class="mb-2 text-gray-500">Tổng tiền sau thuế</div>
+                      <div class="mb-4">{formatCurrency(Number(booking?.totalPriceAfterTax))}</div>
                     </div>
                     <div>
                       <div class="mb-2 text-gray-500">Ngày đặt</div>
@@ -299,12 +307,8 @@ const DetailBookingScreen = () => {
                           "DD/MM/YYYY HH:mm:ss"
                         )}
                       </div>
-                      {/* <div class="mb-2 text-gray-500">Số CMND/CCCD</div>
-                                                          <div class="mb-4">079303041653</div> */}
                       <div class="mb-2 text-gray-500">Số tiền đã trả</div>
-                      <div class="mb-4">{booking?.amountPaid}</div>
-                      {/* <div class="mb-2 text-gray-500">Địa chỉ</div>
-                                                          <div class="mb-4">{userData?.userPhoneNumber}</div> */}
+                      <div class="mb-4">{formatCurrency(Number(booking?.amountPaid))}</div>
                     </div>
                     <div class="mb-4">
                       <h2 class="font-bold mb-2">Phòng:</h2>

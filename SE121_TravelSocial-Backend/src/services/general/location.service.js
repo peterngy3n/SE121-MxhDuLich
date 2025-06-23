@@ -2,6 +2,7 @@ const Location = require('../../models/general/location.model');
 const {NotFoundException} = require('../../errors/exception');
 const cloudinary = require('../../config/cloudinary.config');
 const { slugify } = require('../../utils/normalizeString');
+const { getActivePromotionsForLocations } = require('./location-promotion.util');
 
 const createLocation = async (locationData) => {
     const savedLocation = await locationData.save();
@@ -47,10 +48,34 @@ const getAllLocation = async (page = 1, limit = 10) => {
       Location.find().skip(skip).limit(limit),
       Location.countDocuments()
     ]);
-  
-    if (allLocation.length !== 0) {
+
+    // Lấy promotion event cho tất cả location (nếu có)
+    const locationIds = allLocation.map(loc => loc._id);
+    console.log('Location IDs:', locationIds);
+    const promotions = await getActivePromotionsForLocations(locationIds);
+    console.log('Promotions:', promotions);
+    // Map locationId -> promotions
+    const promotionMap = {};
+    promotions.forEach(promo => {
+      promo.locationIds.forEach(locId => {
+        const key = locId.toString();
+        if (!promotionMap[key]) promotionMap[key] = [];
+        promotionMap[key].push(promo);
+        console.log(`Promotion ${promo._id} added to location ${key}`);
+      });
+    });
+    // Gắn promotion vào từng location
+    const allLocationWithPromotion = allLocation.map(loc => {
+      const locObj = loc.toObject ? loc.toObject() : loc;
       return {
-        data: allLocation,
+        ...locObj,
+        promotions: promotionMap[loc._id.toString()] || []
+      };
+    });
+
+    if (allLocationWithPromotion.length !== 0) {
+      return {
+        data: allLocationWithPromotion,
         total,
         page,
         limit,

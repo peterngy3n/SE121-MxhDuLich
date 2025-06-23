@@ -14,6 +14,7 @@ const reviewRoute = require('./booking/review.route')
 const VNPayRoute = require('./booking/vnpay.route')
 const voucherRoute = require('./booking/voucher.route')
 const vnpayRoute = require('./booking/vnpay.route')
+const promotionEventRoute = require('./booking/promotion-event.route')
 
 //Social route
 
@@ -37,6 +38,7 @@ const relationRoute = require('./social/relation.route')
 const socketRoute = require('./general/socket.route')
 const notificationRoute = require('./general/notification.route')
 const emailRoute = require('./general/email.route')
+const locationPromotionRoute = require('./general/location-promotion.route')
 
 const router = express.Router();
 //const io = app.get('io')
@@ -68,6 +70,8 @@ router.use('/', voucherRoute)
 router.use('/', emailRoute)
 router.use('/', vnpayRoute)
 router.use('/', notificationRoute)
+router.use('/', locationPromotionRoute)
+router.use('/', promotionEventRoute)
 
 
 module.exports = router

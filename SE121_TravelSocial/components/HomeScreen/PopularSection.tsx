@@ -151,6 +151,10 @@ export default function PopularSection({ categoryId, navigation }: PopularSectio
       extrapolate: 'clamp',
     });
 
+    // Lấy promotion đầu tiên nếu có
+    const hasPromotion = item.promotions && item.promotions.length > 0;
+    const promotionName = hasPromotion ? item.promotions[0].name : null;
+
     return (
       <Animated.View
         style={[
@@ -167,20 +171,25 @@ export default function PopularSection({ categoryId, navigation }: PopularSectio
               source={
                 item?.image?.[0]?.url
                   ? { uri: item.image[0].url }
-                  : require('@/assets/images/bai-truoc-20.jpg') // Hình ảnh mặc định
+                  : require('@/assets/images/bai-truoc-20.jpg')
               }
-
               style={styles.image}
             />
+            {/* Badge promotion */}
+            {hasPromotion && (
+              <View style={styles.promotionBadge}>
+                <Text style={styles.promotionText}>{promotionName}</Text>
+              </View>
+            )}
           </View>
           <View style={styles.titleBox}>
-          <View style={styles.textBoxProvince}>
+            <View style={styles.textBoxProvince}>
               <Text style={[styles.textStyle, { fontSize: 12, marginBottom: 10 }]}>{item?.province}</Text>
             </View>
             <View style={styles.textBox}>
-              <Text style={[styles.textStyle, { fontSize: 12 }]}>{item.name}</Text>
+              <Text style={[styles.textStyle, { fontSize: 16, fontWeight: 'bold' }]} numberOfLines={1}>{item.name}</Text>
             </View>
-            <View style={{ flexDirection: 'row', marginTop: 2 }}>
+            <View style={{ flexDirection: 'row', marginTop: 2, alignItems: 'center', justifyContent: 'space-between' }}>
               <View style={styles.textBox}>
                 <Image
                   source={require('../../assets/icons/star.png')}
@@ -188,18 +197,12 @@ export default function PopularSection({ categoryId, navigation }: PopularSectio
                 />
                 <Text style={[styles.textStyle, { fontSize: 12 }]}>{item.rating}</Text>
               </View>
-              <TouchableOpacity
-                onPress={() => handlePress(item._id.toString())}
-                style={{ position: 'absolute', right: 0, }}
-              >
-                <Image
-                  source={require('@/assets/icons/heart.png')}
-                  style={[
-                    styles.heart,
-                    { tintColor: likedItems[item._id] ? 'red' : 'white' },
-                  ]}
-                />
-              </TouchableOpacity>
+              {/* Giá hiển thị nổi bật */}
+              <View style={{ backgroundColor: '#fff', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2, marginLeft: 8 }}>
+                <Text style={{ color: '#196EEE', fontWeight: 'bold', fontSize: 13 }}>
+                  {typeof item.minPrice === 'number' ? `${item.minPrice.toLocaleString('vi-VN')} VND` : 'Giá không xác định'}
+                </Text>
+              </View>
             </View>
           </View>
         </TouchableOpacity>
@@ -283,14 +286,14 @@ const styles = StyleSheet.create({
   },
   textBox: {
     flexDirection: 'row',
-    backgroundColor: '#4D5652',
+    backgroundColor: '#fff',
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'space-evenly',
   },
   textBoxProvince: {
     flexDirection: 'row',
-    backgroundColor: '#4D5652',
+    backgroundColor: '#fff',
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
@@ -299,8 +302,8 @@ const styles = StyleSheet.create({
   },
   textStyle: {
     fontWeight: 'bold',
-    color: 'white',
-    marginHorizontal: 10,
+    color: 'black',
+    marginHorizontal: 5,
     marginVertical: 5,
   },
   ratingBox: {
@@ -317,5 +320,31 @@ const styles = StyleSheet.create({
   heart: {
     width: 30,
     height: 30,
+  },
+  promotionBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    zIndex: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 6,
+  },
+  promotionText: {
+    color: '#333',
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+  priceText: {
+    fontWeight: 'bold',
+    color: '#196EEE',
+    fontSize: 14,
+    marginTop: 5,
   },
 });

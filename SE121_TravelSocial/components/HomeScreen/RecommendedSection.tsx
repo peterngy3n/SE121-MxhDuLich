@@ -6,7 +6,7 @@ import {API_BASE_URL, API_RCM_URL} from '../../constants/config';
 
 const {width, height} = Dimensions.get('window')
 const CARD_WIDTH =  width - 190;
-const CARD_HEIGHT = 200;
+const CARD_HEIGHT = 240;
 const CARD_WIDTH_SPACING = CARD_WIDTH + 24;
 type LikedItems = {
     [key: string]: boolean; 
@@ -79,7 +79,6 @@ const RecommendedSectionComponent = React.memo(function RecommendedSection({ cat
                 return;
             }
             const response = await fetchWithTimeout(`${API_RCM_URL}/recommend_legacy?case=popular`, {}, 10000); // 10s timeout
-            // Đảm bảo response là Response trước khi gọi .json()
             if (!(response instanceof Response)) {
                 throw new Error('Không nhận được phản hồi hợp lệ từ máy chủ.');
             }
@@ -107,34 +106,66 @@ const RecommendedSectionComponent = React.memo(function RecommendedSection({ cat
                 return;
             }
             if (isJson && data && data.recommendations) {
-                if (pageNumber === 1) {
-                    setLocations(data.recommendations);
-                    // Lưu cache ngoài component
-                    cacheRef.data = data.recommendations;
-                } else {
-                    const newItems = data.recommendations as Location[];
-                    setLocations(prev => {
-                        const existingIds = new Set(prev.map(item => item._id || item.location_id));
-                        const uniqueNewItems = newItems.filter((item: Location) => !existingIds.has(item._id || item.location_id));
-                        const merged = [...prev, ...uniqueNewItems];
-                        // Lưu cache ngoài component
-                        cacheRef.data = merged;
-                        return merged;
-                    });
+                // Lấy danh sách locationId
+                const locationIds = data.recommendations.map((item: any) => item._id || item.location_id).filter(Boolean);
+                if (!locationIds || locationIds.length === 0) {
+                    setLocations([]);
+                    setHasMore(false);
+                    setLoading(false);
+                    return;
                 }
-                setHasMore(data.recommendations.length > 0);
-                setPage(pageNumber + 1);
+                // Gọi API lấy location có promotion
+                const promoRes = await fetch(`${API_BASE_URL}/locations-with-promotion-by-ids`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ locationIds })
+                });
+                let promoData = null;
+                if (promoRes.ok) {
+                    promoData = await promoRes.json();
+                }
+                // Sửa tại đây: lấy từ promoData.data
+                if (promoData && Array.isArray(promoData.data)) {
+                    if (pageNumber === 1) {
+                        setLocations(promoData.data);
+                        cacheRef.data = promoData.data;
+                    } else {
+                        const newItems = promoData.data as Location[];
+                        setLocations(prev => {
+                            const existingIds = new Set(prev.map(item => item._id || item.location_id));
+                            const uniqueNewItems = newItems.filter((item: Location) => {
+                                const key = item._id || item.location_id;
+                                return key && !existingIds.has(key);
+                            });
+                            const merged = [...prev, ...uniqueNewItems];
+                            // Loại bỏ trùng lặp lần cuối (phòng trường hợp API trả về trùng trong cùng 1 lần)
+                            const seen = new Set();
+                            const deduped = merged.filter(item => {
+                                const key = item._id || item.location_id;
+                                if (!key || seen.has(key)) return false;
+                                seen.add(key);
+                                return true;
+                            });
+                            cacheRef.data = deduped;
+                            return deduped;
+                        });
+                    }
+                    setHasMore(promoData.data.length > 0);
+                    setPage(pageNumber + 1);
+                } else {
+                    setHasMore(false);
+                }
             } else {
                 setHasMore(false);
             }
         } catch (error: any) {
             setHasMore(false);
             if (error instanceof TypeError && String(error).includes('Network request failed')) {
-                console.error('Popular API error:', error);
+                console.log('Popular API error:', error);
             } else if (error.message === 'Request timeout') {
-                console.error('Popular API error: Request timeout');
+                console.log('Popular API error: Request timeout');
             } else {
-                console.error('Popular API error:', error);
+                console.log('Popular API error:', error);
             }
         } finally {
             setIsFetchingMore(false);
@@ -158,7 +189,7 @@ const RecommendedSectionComponent = React.memo(function RecommendedSection({ cat
     // }
 
     return (
-        <View style={{height:CARD_HEIGHT+50}}>
+        <View style={{height:CARD_HEIGHT+80}}>
             <Text style = {styles.titleText}>Phổ biến</Text>
             <FlatList
                 ref={flatListRef}
@@ -166,7 +197,7 @@ const RecommendedSectionComponent = React.memo(function RecommendedSection({ cat
                 horizontal
                 snapToInterval={CARD_WIDTH_SPACING}
                 decelerationRate={"fast"}
-                keyExtractor={item => item._id || item.location_id}
+                keyExtractor={item => (item._id || item.location_id || `${item.name}_${item.province}_${item.index}`)}
                 onEndReached={loadMoreData}
                 onMomentumScrollBegin={() => setOnEndReachedCalledDuringMomentum(false)}
                 onEndReachedThreshold={0.2}
@@ -174,48 +205,73 @@ const RecommendedSectionComponent = React.memo(function RecommendedSection({ cat
                 windowSize={10}
                 removeClippedSubviews={true}
                 renderItem={({item, index}) => {
+                    // Lấy promotion (nếu có)
+                    const promotions = item.promotions || item.promotion || [];
+                    const hasPromotion = Array.isArray(promotions) ? promotions.length > 0 : !!promotions;
+                    const firstPromotion = Array.isArray(promotions) ? promotions[0] : promotions;
+                    // Lấy giá (nếu có)
+                    const price = item.price || item.minPrice || item.maxPrice || null;
                     return (
-                        <TouchableOpacity onPress={() => navigation.navigate('detail-screen', { id: item._id || item.location_id })} style = {[
+                        <TouchableOpacity onPress={() => navigation.navigate('detail-screen', { id: item._id || item.location_id })} style={[
                             styles.cardContainer,
-                            {
-                            marginLeft: 24,
-                            marginRight:  index === locations.length - 1 ? 24 : 0}]}>
+                            { marginLeft: 24, marginRight: index === locations.length - 1 ? 24 : 0, width: CARD_WIDTH + 30, height: CARD_HEIGHT + 10 }
+                        ]}>
                             <View>
-                                <View style = {[styles.imageBox, ]}>
-                                <Image
-                                source={
-                                item?.image?.[0]?.url
-                                    ? { uri: item.image[0].url }
-                                    : require('@/assets/images/bai-truoc-20.jpg')
-                                }
-                                style={styles.image}
-                                /> 
-                                    <View style= {styles.titleBox}>
-                                        <View style = {[styles.textBox, {top: 10, width: 70}]}> 
-                                            <Image source={require('@/assets/icons/star.png')}
-                                            style = {styles.star}></Image>
-                                            <Text style = {[styles.textrating, {fontSize: 15,}]}>{item.rating}</Text>
+                                <View style={[styles.imageBox, { position: 'relative', width: CARD_WIDTH + 25, height: CARD_HEIGHT - 80 }]}> 
+                                    <Image
+                                        source={
+                                            item?.image?.[0]?.url
+                                                ? { uri: item.image[0].url }
+                                                : require('@/assets/images/bai-truoc-20.jpg')
+                                        }
+                                        style={[styles.image, { width: CARD_WIDTH + 30, height: CARD_HEIGHT - 40 }]}
+                                    />
+                                    {/* Promotion badge góc phải trên */}
+                                    {hasPromotion && firstPromotion && (
+                                        <View style={styles.promotionBadge}>
+                                            <Text style={styles.promotionBadgeText} numberOfLines={1}>
+                                                {firstPromotion.name}
+                                            </Text>
                                         </View>
-                                        <TouchableOpacity onPress={()=>handlePress(item._id?.toString() || item.location_id?.toString())} style= {[styles.textBox2,{ bottom: 25,}]}> 
-                                            <Image source={require('@/assets/icons/heart.png')}
-                                            style={[
-                                            styles.heart, 
-                                            { tintColor: likedItems[item._id || item.location_id] ? 'red' : 'white' } 
-                                        ]}></Image>
-                                        </TouchableOpacity>
+                                    )}
+                                    {/* Rating góc trái dưới ảnh */}
+                                    <View style={styles.ratingBox}>
+                                        <Image source={require('@/assets/icons/star.png')} style={styles.star} />
+                                        <Text style={styles.textrating}>{item.rating ? item.rating.toFixed(1) : '--'}</Text>
                                     </View>
                                 </View>
-                                <View style = {styles.footer}>
-                                    <View>
-                                        <Text style = {[styles.textStyle, {fontSize: 14}]}>{item.name}</Text>
-                                        <View>
-                                            <Text style = {[styles.textStyle, {fontSize: 14}]}>{item?.province}</Text>
-                                        </View>
+                                <View style={styles.footerBox}>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.locationName} numberOfLines={1} ellipsizeMode="tail">{item.name}</Text>
+                                        <Text style={styles.locationProvince} numberOfLines={1}>{item?.province}</Text>
+                                        {price && (
+                                            <Text style={styles.priceText}>Giá: {price.toLocaleString()}đ</Text>
+                                        )}
+                                        {/* Promotion chi tiết dưới tên */}
+                                        {/* {hasPromotion && firstPromotion && (
+                                            <View style={styles.promotionBox}>
+                                                <Text style={styles.promotionTitle}>{firstPromotion.name}</Text>
+                                                {firstPromotion.description ? (
+                                                    <Text style={styles.promotionDesc} numberOfLines={1}>{firstPromotion.description}</Text>
+                                                ) : null}
+                                                {firstPromotion.discount && (
+                                                    <Text style={styles.promotionDiscount}>
+                                                        {firstPromotion.discount.type === 'PERCENT'
+                                                            ? `Giảm ${firstPromotion.discount.amount}%`
+                                                            : `Giảm ${firstPromotion.discount.amount.toLocaleString()}đ`}
+                                                    </Text>
+                                                )}
+                                            </View>
+                                        )} */}
                                     </View>
-                                    
-                                    <View style = {[styles.textBox,{borderWidth:3, borderColor:'white'}]}>
-                                        <Text style = {[styles.textStyle2, {marginHorizontal: 5, color: 'white'}]}>hot deal</Text>
-                                    </View>
+                                    <TouchableOpacity onPress={() => handlePress(item._id?.toString() || item.location_id?.toString())} style={styles.heartBox}>
+                                        <Image source={require('@/assets/icons/heart.png')}
+                                            style={[
+                                                styles.heart,
+                                                { tintColor: likedItems[item._id || item.location_id] ? 'red' : 'white' }
+                                        ]}
+                                        />
+                                    </TouchableOpacity>
                                 </View>
                             </View>
                         </TouchableOpacity>                            
@@ -259,18 +315,18 @@ const styles = StyleSheet.create({
     },
     card: {
         width: CARD_WIDTH,
-        height: CARD_HEIGHT-70,
+        height: CARD_HEIGHT-100,
         marginVertical: 10,
     },
     imageBox: {
         width: CARD_WIDTH,
-        height: CARD_HEIGHT - 60,
+        height: CARD_HEIGHT - 100,
         borderRadius: 24,
         overflow: 'hidden',    
     },
     image: {
         width: CARD_WIDTH,
-        height: CARD_HEIGHT - 60,
+        height: CARD_HEIGHT - 100,
         resizeMode: 'cover',
 
     },
@@ -302,7 +358,7 @@ const styles = StyleSheet.create({
     star: {
         width: 18,
         height: 18,
-        left: 10
+        //left: 10
     },
     heart: {
         width: 30,
@@ -322,7 +378,7 @@ const styles = StyleSheet.create({
         fontWeight: 'medium',
         color: 'white',
         marginLeft: 5,
-        left:7,
+        //left:7,
         top:0,
         marginVertical: 2,
     },
@@ -335,5 +391,96 @@ const styles = StyleSheet.create({
     footer: {
         flexDirection: 'row', 
         justifyContent: 'space-between', 
-    }
+    },
+    // Thêm style cho promotion
+    promotionBox: {
+        backgroundColor: '#FFE066',
+        borderRadius: 10,
+        padding: 6,
+        marginTop: 4,
+        marginBottom: 2,
+        maxWidth: 180,
+    },
+    promotionTitle: {
+        fontWeight: 'bold',
+        color: '#D35400',
+        fontSize: 13,
+    },
+    promotionDesc: {
+        color: '#7B7B7B',
+        fontSize: 12,
+    },
+    promotionDiscount: {
+        color: '#C0392B',
+        fontWeight: 'bold',
+        fontSize: 13,
+        marginTop: 2,
+    },
+    // Badge góc phải trên
+    promotionBadge: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        backgroundColor: '#FFD700',
+        borderRadius: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        zIndex: 10,
+        maxWidth: 220,
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    promotionBadgeText: {
+        color: '#C0392B',
+        fontWeight: 'bold',
+        fontSize: 12,
+    },
+    ratingBox: {
+        position: 'absolute',
+        left: 10,
+        bottom: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        borderRadius: 12,
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+    },
+    footerBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginTop: 8,
+        paddingHorizontal: 4,
+    },
+    locationName: {
+        fontWeight: 'bold',
+        fontSize: 18,
+        color: '#222',
+        marginBottom: 2,
+        maxWidth: CARD_WIDTH - 30,
+    },
+    locationProvince: {
+        color: '#666',
+        fontSize: 14,
+        marginBottom: 2,
+        maxWidth: CARD_WIDTH - 30,
+    },
+    priceText: {
+        color: '#196EEE',
+        fontWeight: 'bold',
+        fontSize: 15,
+        marginBottom: 2,
+    },
+    heartBox: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 4,
+    },
 })

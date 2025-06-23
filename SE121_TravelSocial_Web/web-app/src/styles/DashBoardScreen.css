@@ -541,7 +541,7 @@
 }
 
 .scroll-container {
-  max-height: 400px;
+  max-height: 880px;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -627,7 +627,7 @@
 }
 
 .custom-table td {
-  font-size: 17px;
+  font-size: 10px;
 }
 .admin-info {
   cursor: pointer;

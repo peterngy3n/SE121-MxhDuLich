@@ -419,8 +419,8 @@ const StatisticBusinessScreen = () => {
   };
 
   return (
-    <div className="container">
-      <div className="containerformobile">
+    <div >
+      <div>
         <div style={{ marginBottom: "20px" }}>
           <label htmlFor="yearSelect">Chọn năm: </label>
           <select id="yearSelect" value={years} onChange={handleYearChange}>
@@ -432,7 +432,7 @@ const StatisticBusinessScreen = () => {
             ))}
           </select>
         </div>
-        <div className="containerlistbusiness widthlistbusiness">
+        <div>
           {/* Thống kê tổng quan */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div className="bg-blue-50 border rounded-lg p-4 text-center">

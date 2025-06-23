@@ -10,6 +10,7 @@ const Room = require('../../models/booking/room.model')
 const {NotFoundException, ForbiddenError} = require('../../errors/exception')
 const { default: mongoose } = require('mongoose')
 const BookingBuilder = require('../../components/builder/booking.builder')
+const locationPromotionUtil = require('../general/location-promotion.util')
 
 const updateStatusBooking = async (bookingId, amountPayed) => {
     const booking = await Booking.findById(bookingId);
@@ -110,7 +111,7 @@ const getBookingByLocationId = async (locationId) => {
 const createBooking = async (bookingData, preview_bookingId) => {
     const { userId, dateBooking, checkinDate, checkoutDate, voucherId } = bookingData;
     const previewBooking = await previewBookingService.getBookingPreview(userId, preview_bookingId)
-    const voucher = await voucherService.getVoucherById(voucherId)
+    // const voucher = await voucherService.getVoucherById(voucherId) // Không cần lấy voucher nếu không có
 
     console.log('previewBooking: ', previewBooking)
 
@@ -121,42 +122,73 @@ const createBooking = async (bookingData, preview_bookingId) => {
     .setServices(previewBooking.services)
     .setVoucherId(voucherId)
     .setPrice(previewBooking.totalPrice)
+    console.log('Booking data before transaction: ', booking.booking);
 
     const session = await mongoose.startSession();
-    
     try {
         session.startTransaction();
         // 1. Kiểm tra & trừ số lượng phòng
         if(await roomService.getRoomAvailable(previewBooking.items, checkinDate, checkoutDate, session) === false) {
             throw new Error('Phòng đã được đặt')
         }
-        // 2. Validate lại voucher
-        if(voucherId) {
-            const {totalPrice, discountAmount, totalPriceAfterDiscount} 
-            = await voucherService.verifyVoucher(voucher.code, preview_bookingId, userId, session)
-            booking.setVoucherId(new mongoose.Types.ObjectId(voucherId))
-            booking.setDiscount(discountAmount)
+        // 2. Áp dụng voucher và promotion event (cộng dồn, không loại trừ)
+        let voucherDiscount = 0;
+        let promotionDiscount = 0;
+        // Lấy locationId từ phòng đầu tiên
+        const firstRoom = previewBooking.items && previewBooking.items[0];
+        let locationId = null;
+        if (firstRoom && firstRoom.roomId) {
+            const room = await Room.findById(firstRoom.roomId);
+            if (room && room.locationId) {
+                locationId = room.locationId;
+                const events = await locationPromotionUtil.getActivePromotionsForLocation(locationId);
+                let bestDiscount = 0;
+                for (const event of events) {
+                    if (event.minOrderValue && previewBooking.totalPrice < event.minOrderValue) continue;
+                    let discount = 0;
+                    if (event.discount.type === 'PERCENT') {
+                        discount = (previewBooking.totalPrice * event.discount.amount) / 100;
+                    } else if (event.discount.type === 'AMOUNT') {
+                        discount = event.discount.amount;
+                    }
+                    if (event.maxDiscount) discount = Math.min(discount, event.maxDiscount);
+                    if (discount > bestDiscount) {
+                        bestDiscount = discount;
+                    }
+                }
+                promotionDiscount = bestDiscount;
+                if (promotionDiscount > 0) {
+                    console.log('Best promotion discount: ', promotionDiscount);
+                }
+            }
         }
-        console.log('Here: ')
-        
+        if(voucherId) {
+            const voucher = await voucherService.getVoucherById(voucherId);
+            const {totalPrice, voucherDiscountAmount: vDiscount, promotionDiscountAmount: pDiscount, totalPriceAfterDiscount} 
+                = await voucherService.verifyVoucher(voucher.code, preview_bookingId, userId, session)
+            booking.setVoucherId(new mongoose.Types.ObjectId(voucherId))
+            voucherDiscount = vDiscount;
+            promotionDiscount = pDiscount; // Cộng dồn với discount từ promotion event
+        }
+        // Tổng discount là tổng của voucher và promotion
+        const totalDiscount = (voucherDiscount || 0) + (promotionDiscount || 0);
+        booking.setDiscount(totalDiscount);
         booking.setTax(0.08)
-
+        console.log('Booking data before build: ', booking.booking);
         // 3. Tạo booking
-
         booking.build()
-        
-        const bookingData = new Booking(booking.booking)
-        const savedBooking = await bookingData.save({ session });
-
-        
-
-        // 4. Update các bên liên quan
-        await voucherService.updateVoucher(
-            voucherId,
-            { $inc: { usesCount: 1 } }, // tăng 1 lượt dùng
-            session);
-        await voucherUserService.addVoucherUsage(userId, voucher.code, session);
-
+        console.log('Booking data: ', booking.booking);
+        const bookingDataDoc = new Booking(booking.booking)
+        const savedBooking = await bookingDataDoc.save({ session });
+        // 4. Update các bên liên quan nếu có voucher
+        if (voucherId) {
+            await voucherService.updateVoucher(
+                voucherId,
+                { $inc: { usesCount: 1 } }, // tăng 1 lượt dùng
+                session);
+            const voucher = await voucherService.getVoucherById(voucherId);
+            await voucherUserService.addVoucherUsage(userId, voucher.code, session);
+        }
         await session.commitTransaction();
         return savedBooking;
     } catch (err) {
@@ -221,54 +253,75 @@ const getBookingByBusinessId = async (businessId) => {
     return bookings;
 };
 
-const calculateTotalEstimatedPrice = async (rooms, services) => {
-    //Lấy thông tin của các phòng từ database
-    let totalServicePrice = 0
-    let totalRoomPrice = 0
+const calculateTotalWithPromotion = async (rooms, services) => {
+    console.log('Rooms:', rooms);
+    let totalServicePrice = 0;
+    let totalRoomPrice = 0;
+    let locationId = null;
     try {
-        console.log('[BookingCalc] Input rooms:', JSON.stringify(rooms));
-        console.log('[BookingCalc] Input services:', JSON.stringify(services));
-        if (rooms) {
-            const roomIds = rooms.map(r => new mongoose.Types.ObjectId(r.roomId))
-            const roomData = await Room.find({ _id: { $in: roomIds } }, { _id: 1, pricePerNight: 1})
-            //Đưa data vào map để tối ưu thời gian
-            const roomMap = new Map()
-            roomData.forEach(r => roomMap.set(r._id.toString(), r.pricePerNight))
-            //Tính tổng giá các phòng
+        if (rooms && rooms.length > 0) {
+            console.log('Calculating room prices...');
+            const roomIds = rooms.map(r => new mongoose.Types.ObjectId(r.roomId));
+            const roomData = await Room.find({ _id: { $in: roomIds } }, { _id: 1, pricePerNight: 1, locationId: 1 });
+            const roomMap = new Map();
+            roomData.forEach(r => roomMap.set(r._id.toString(), { price: r.pricePerNight, locationId: r.locationId }));
             for (const r of rooms) {
-                const roomPrice = roomMap.get(r.roomId)
-                console.log(`[BookingCalc] RoomId: ${r.roomId}, Price: ${roomPrice}, Qty: ${r.quantity}, Nights: ${r.nights}`);
-                if(!roomPrice) {
-                    console.error(`[BookingCalc] Room not found: ${r.roomId}`);
-                    throw new NotFoundException('Cannot found room')
-                }
-                totalRoomPrice += roomPrice * r.quantity * r.nights
+                const roomInfo = roomMap.get(r.roomId);
+                if (!roomInfo) throw new NotFoundException('Cannot found room');
+                totalRoomPrice += roomInfo.price * r.quantity * r.nights;
+                if (!locationId) locationId = roomInfo.locationId;
+                console.log('Location ID:', roomInfo.locationId);
             }
         }
-        //Lấy thông tin của các dịch vụ từ database
-        if (services) {
-            const serviceIds = services.map(s => new mongoose.Types.ObjectId(s.serviceId))
-            const serviceData = await Service.find({ _id: { $in: serviceIds } }, { _id: 1, price: 1})
-            //Đưa data vào map để tối ưu thời gian
-            const serviceMap = new Map()
-            serviceData.forEach(s => serviceMap.set(s._id.toString(), s.price))
-            //Tính tổng giá các dịch vụ
+        if (services && services.length > 0) {
+            const serviceIds = services.map(s => new mongoose.Types.ObjectId(s.serviceId));
+            const serviceData = await Service.find({ _id: { $in: serviceIds } }, { _id: 1, price: 1 });
+            const serviceMap = new Map();
+            serviceData.forEach(s => serviceMap.set(s._id.toString(), s.price));
             for (const s of services) {
-                const servicePrice = serviceMap.get(s.serviceId)
-                console.log(`[BookingCalc] ServiceId: ${s.serviceId}, Price: ${servicePrice}, Qty: ${s.quantity}`);
-                if(!servicePrice) {
-                    console.error(`[BookingCalc] Service not found: ${s.serviceId}`);
-                    throw new NotFoundException('Cannot found service')
-                }
-                totalServicePrice += servicePrice * s.quantity
+                const servicePrice = serviceMap.get(s.serviceId);
+                if (!servicePrice) throw new NotFoundException('Cannot found service');
+                totalServicePrice += servicePrice * s.quantity;
             }
         }
-        console.log(`[BookingCalc] totalRoomPrice: ${totalRoomPrice}, totalServicePrice: ${totalServicePrice}`);
-        return totalRoomPrice + totalServicePrice
+        const total = totalRoomPrice + totalServicePrice;
+        // Áp dụng promotion event cho location nếu có
+        let promotionDiscount = 0;
+        let promotionEvent = null;
+        if (locationId) {
+            const now = new Date();
+            const events = await locationPromotionUtil.getActivePromotionsForLocation(locationId);
+            console.log('Promotion events:', events);
+            for (const event of events) {
+                if (event.minOrderValue && total < event.minOrderValue) continue;
+                let discount = 0;
+                if (event.discount.type === 'PERCENT') {
+                    discount = (total * event.discount.amount) / 100;
+                } else if (event.discount.type === 'AMOUNT') {
+                    discount = event.discount.amount;
+                }
+                if (event.maxDiscount) discount = Math.min(discount, event.maxDiscount);
+                if (discount > promotionDiscount) {
+                    promotionDiscount = discount;
+                    promotionEvent = event;
+                }
+            }
+        }
+        return { total, promotionDiscount, totalAfterPromotion: total - promotionDiscount, promotionEvent };
     } catch (err) {
-        console.error('[BookingCalc] Error in calculateTotalEstimatedPrice:', err);
         throw err;
     }
+}
+
+// Sửa lại hàm calculateTotalEstimatedPrice để áp dụng promotion event
+const calculateTotalEstimatedPrice = async (rooms, services) => {
+    const { total, promotionDiscount, totalAfterPromotion, promotionEvent } = await calculateTotalWithPromotion(rooms, services);
+    return {
+        totalRoomAndService: total,
+        promotionDiscount,
+        totalAfterPromotion,
+        promotionEvent,
+    };
 }
 
 const getRevenueByMonth = async (month, year) => {
@@ -397,6 +450,7 @@ const getFullBookingByBusinessId = async (businessId) => {
             },
         },
     })
+    .sort({ dateBooking: -1 }) // Sắp xếp theo ngày đặt
     .populate({
         path: 'userId',
         select: 'userName userAvatar',

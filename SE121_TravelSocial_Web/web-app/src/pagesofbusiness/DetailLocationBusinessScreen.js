@@ -400,9 +400,9 @@ const DetailLocationBusinessScreen = () => {
   }, [currentTab, id]);
 
   return (
-    <div class="container">
-      <div class="containerformobile">
-        <div class="containerlistbusiness widthlistbusiness">
+    <div>
+      <div >
+        <div >
           <div class=" bg-white rounded-lg shadow-md p-2">
             <div class="flex justify-between">
               <div class="flex items-center">
@@ -505,13 +505,16 @@ const DetailLocationBusinessScreen = () => {
                   <div>
                     <p class="text-gray-600">Mã địa điểm</p>
                     {isEditing ? (
-                      <input
-                        type="text"
-                        name="maDiaDiem"
-                        value={"Mã địa điểm"}
-                        onChange={handleInputChange}
-                        className="border p-2 rounded"
-                      />
+                      // <input
+                      //   type="text"
+                      //   name="maDiaDiem"
+                      //   value={"Mã địa điểm"}
+                      //   onChange={handleInputChange}
+                      //   className="border p-2 rounded"
+                      // />
+                      <p class="font-semibold">
+                        {locationInfo?._id || 122345679876543}
+                      </p>
                     ) : (
                       <p class="font-semibold">
                         {locationInfo?._id || 122345679876543}
@@ -537,13 +540,16 @@ const DetailLocationBusinessScreen = () => {
                   <div>
                     <p class="text-gray-600">Tên nhà kinh doanh</p>
                     {isEditing ? (
-                      <input
-                        type="text"
-                        name="tenDiaDiem"
-                        value={locationInfo.tenDiaDiem}
-                        onChange={handleInputChange}
-                        className="border p-2 rounded"
-                      />
+                      // <input
+                      //   type="text"
+                      //   name="tenDiaDiem"
+                      //   value={locationInfo.tenDiaDiem}
+                      //   onChange={handleInputChange}
+                      //   className="border p-2 rounded"
+                      // />
+                      <p class="font-semibold">
+                        {userData?.userName || "Nguyễn Văn AA"}
+                      </p>
                     ) : (
                       <p class="font-semibold">
                         {userData?.userName || "Nguyễn Văn AA"}
@@ -583,13 +589,19 @@ const DetailLocationBusinessScreen = () => {
                   <div>
                     <p class="text-gray-600">Ngày đăng ký kinh doanh</p>
                     {isEditing ? (
-                      <input
-                        type="text"
-                        name="tenDiaDiem"
-                        value={locationInfo.tenDiaDiem}
-                        onChange={handleInputChange}
-                        className="border p-2 rounded"
-                      />
+                      // <input
+                      //   type="text"
+                      //   name="tenDiaDiem"
+                      //   value={locationInfo.tenDiaDiem}
+                      //   onChange={handleInputChange}
+                      //   className="border p-2 rounded"
+                      // />
+                      <p class="font-semibold">
+                        {" "}
+                        {moment(locationInfo.dateCreated).format(
+                          "DD-MM-YYYY hh:mm:ss"
+                        )}{" "}
+                      </p>
                     ) : (
                       <p class="font-semibold">
                         {" "}

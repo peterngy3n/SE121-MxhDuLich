@@ -1,6 +1,7 @@
 const { default: mongoose } = require("mongoose")
 const Room = require("../../models/booking/room.model")
 const Service = require("../../models/booking/service.model")
+const { getBestPromotionEventDiscount } = require("../../services/general/promotion-calc.util");
 
 class PreviewBookingBuilder {
     constructor() {
@@ -11,6 +12,8 @@ class PreviewBookingBuilder {
             totalPrice: 0,
             tax: 0,
             voucherId: null,
+            totalPriceAfterPromotion: 0,
+            promotionDiscount: 0,
             totalPriceAfterTax: 0,
             amountPaid: 0
         }
@@ -75,17 +78,37 @@ class PreviewBookingBuilder {
         return this
     }
 
-    build() {
-        this.booking.totalPrice = caculatePrice(this.booking.items, this.booking.services) 
-        this.booking.tax = this.booking.totalPrice * 0.08
-        this.booking.totalPriceAfterTax = this.booking.totalPrice + this.booking.tax
-
+    async build() {
+        this.booking.totalPrice = caculatePrice(this.booking.items, this.booking.services);
+        // Lấy locationId từ phòng đầu tiên
+        let locationId = null;
+        if (this.booking.items.length > 0) {
+            const firstRoom = await Room.findById(this.booking.items[0].roomId);
+            if (firstRoom && firstRoom.locationId) {
+                locationId = firstRoom.locationId.toString();
+            }
+        }
+        let promotionDiscount = 0;
+        if (locationId) {
+            // Tìm khuyến mãi tốt nhất cho location này
+            const { discount } = await getBestPromotionEventDiscount(locationId, this.booking.totalPrice);
+            console.log("Best promotion discount: ", discount);
+            promotionDiscount = discount || 0;
+        }
+        this.booking.promotionDiscount = promotionDiscount;
+        this.booking.totalPriceAfterPromotion = this.booking.totalPrice - promotionDiscount;
+        this.booking.tax = this.booking.totalPriceAfterPromotion * 0.08;
+        this.booking.totalPriceAfterTax = this.booking.totalPriceAfterPromotion + this.booking.tax;
+        // if (this.booking.totalPriceAfterPromotion !== this.booking.totalPrice && this.booking.totalPriceAfterPromotion > 0) {
+        //     this.booking.totalPrice = this.booking.totalPriceAfterPromotion;
+        // }
         if(!this.booking.userId ||
             this.booking.items.length === 0 || !this.booking.totalPrice ||
             !this.booking.tax || !this.booking.totalPriceAfterTax) {
             throw new Error('Missing required fields')
         }
-        return this.booking
+        console.log("Preview booking: ", this.booking);
+        return this.booking;
     }
 }
 

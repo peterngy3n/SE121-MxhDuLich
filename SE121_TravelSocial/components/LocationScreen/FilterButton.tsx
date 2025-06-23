@@ -312,9 +312,11 @@ const FilterButton = ({ onApplyFilter }: any) => {
                             {/* Rating */}
                             <Text style={styles.sectionTitle}>Đánh giá tối thiểu</Text>
                             <View style={styles.ratingRow}>
-                                {[1, 2, 3, 4, 5].map(r => (
+                                {[0, 1, 2, 3, 4, 5].map(r => (
                                     <TouchableOpacity key={r} onPress={() => setRating(r)} style={styles.starItem}>
-                                        <Text style={{ fontSize: 25, color: r <= rating ? 'orange' : 'gray' }}>★</Text>
+                                        <Text style={{ fontSize: 25, color: r === 0 ? (rating === 0 ? 'orange' : 'gray') : (r <= rating ? 'orange' : 'gray') }}>
+                                            {r === 0 ? '0★' : '★'}
+                                        </Text>
                                     </TouchableOpacity>
                                 ))}
                             </View>

@@ -65,6 +65,8 @@ export default function ReservationRequiredScreen({ navigation }: {navigation: N
     const [previewBookingId, setPreviewBookingId] = useState<string | null>(null);
     // Thêm state lưu giá giảm voucher (chưa thuế)
     const [voucherDiscount, setVoucherDiscount] = useState(0);
+    // Thêm state lưu giá giảm từ promotion (chưa thuế)
+    const [promotionDiscount, setPromotionDiscount] = useState(0);
 
     const totalRooms = selectedRoomsData.reduce((sum, room) => sum + room.count, 0);
 
@@ -305,7 +307,7 @@ const createPreviewBooking = async () => {
   }
 };
 
-// Sửa lại recalculateTotalPrice để tính đúng tổng tiền và thuế
+// Sửa lại recalculateTotalPrice để lấy cả promotion discount từ BE (nếu có)
 const recalculateTotalPrice = async (voucherObj?: any) => {
   setIsCalculating(true);
   try {
@@ -314,11 +316,13 @@ const recalculateTotalPrice = async (voucherObj?: any) => {
       setDisplayedTotalPrice(totalPrice + tax);
       setDisplayedTax(tax);
       setVoucherDiscount(0);
+      setPromotionDiscount(0);
       setIsCalculating(false);
       return;
     }
     setPreviewBookingId(previewId);
     let discount = 0;
+    let promotion = 0;
     let priceBeforeTax = totalPrice;
     if (voucherObj) {
       try {
@@ -332,17 +336,34 @@ const recalculateTotalPrice = async (voucherObj?: any) => {
           body: JSON.stringify(verifyPayload)
         });
         const voucherData = await voucherRes.json();
+        console.log('Voucher verification response:', voucherData);
         if (voucherData.isSuccess && voucherData.data) {
-          discount = voucherData.data.discount || 0;
-          priceBeforeTax = totalPrice - discount;
+          discount = voucherData.data.voucherDiscount || 0;
+          promotion = voucherData.data.promotionDiscount || 0; // BE trả về nếu có
+          priceBeforeTax = totalPrice - discount - promotion;
           if (priceBeforeTax < 0) priceBeforeTax = 0;
         }
       } catch (e) {
         priceBeforeTax = totalPrice;
         discount = 0;
+        promotion = 0;
+      }
+    } else {
+      // Nếu không có voucher, gọi BE để lấy promotion discount (nếu có)
+      try {
+        const res = await fetch(`${API_BASE_URL}/booking/preview/${previewId}`);
+        const data = await res.json();
+        if (data.isSuccess && data.data) {
+          promotion = data.data.promotionDiscount || 0;
+          priceBeforeTax = totalPrice - promotion;
+          if (priceBeforeTax < 0) priceBeforeTax = 0;
+        }
+      } catch (e) {
+        promotion = 0;
       }
     }
     setVoucherDiscount(discount);
+    setPromotionDiscount(promotion);
     const newTax = 0.0008 * priceBeforeTax;
     setDisplayedTax(newTax);
     setDisplayedTotalPrice(priceBeforeTax + newTax);
@@ -350,6 +371,7 @@ const recalculateTotalPrice = async (voucherObj?: any) => {
     setDisplayedTotalPrice(totalPrice + tax);
     setDisplayedTax(tax);
     setVoucherDiscount(0);
+    setPromotionDiscount(0);
   } finally {
     setIsCalculating(false);
   }
@@ -416,6 +438,14 @@ const recalculateTotalPrice = async (voucherObj?: any) => {
             Alert.alert('Lỗi', 'Không thể kết nối với máy chủ.');
         }
     };
+
+    // Làm tròn số tiền về số nguyên trước khi hiển thị
+const roundedRoomPrice = Math.round(roomPrice);
+const roundedServicePrice = Math.round(servicePrice);
+const roundedTax = Math.round(displayedTax);
+const roundedTotalPrice = Math.round(displayedTotalPrice);
+const roundedVoucherDiscount = Math.round(voucherDiscount);
+const roundedPromotionDiscount = Math.round(promotionDiscount);
 
     return (
 
@@ -539,29 +569,36 @@ const recalculateTotalPrice = async (voucherObj?: any) => {
                   <View style={styles.priceRowTable}>
                     <Image source={require('../assets/icons/room.png')} style={styles.priceIcon} />
                     <Text style={styles.priceLabel}>Phòng ({totalRooms} phòng)</Text>
-                    <Text style={styles.priceValue}>{roomPrice.toLocaleString('vi-VN')} VND</Text>
+                    <Text style={styles.priceValue}>{roundedRoomPrice.toLocaleString('vi-VN')} VND</Text>
                   </View>
                   <View style={styles.priceRowTable}>
                     <Image source={require('../assets/icons/service.png')} style={styles.priceIcon} />
                     <Text style={styles.priceLabel}>Dịch vụ kèm theo</Text>
-                    <Text style={styles.priceValue}>{calculateTotal()?.toLocaleString('vi-VN')} VND</Text>
+                    <Text style={styles.priceValue}>{roundedServicePrice.toLocaleString('vi-VN')} VND</Text>
                   </View>
-                  {/* Nếu có thuế, có thể thêm dòng thuế ở đây */}
+                  {/* Nếu có promotion, hiển thị dòng giảm giá promotion */}
+                  {roundedPromotionDiscount > 0 && (
+                    <View style={[styles.priceRowTable, {backgroundColor:'#e6ffe6'}]}> 
+                      <Image source={require('../assets/icons/ticket.png')} style={styles.priceIcon} />
+                      <Text style={[styles.priceLabel, {color:'#1bbf00'}]}>Giảm giá khuyến mãi</Text>
+                      <Text style={[styles.priceValue, {color:'#1bbf00'}]}>- {roundedPromotionDiscount.toLocaleString('vi-VN')} VND</Text>
+                    </View>
+                  )}
                   <View style={styles.priceRowTable}>
                     <Image source={require('../assets/icons/tax.png')} style={styles.priceIcon} />
                     <Text style={styles.priceLabel}>Thuế</Text>
-                    <Text style={styles.priceValue}>{displayedTax?.toLocaleString('vi-VN')} VND</Text>
+                    <Text style={styles.priceValue}>{roundedTax.toLocaleString('vi-VN')} VND</Text>
                   </View>
-                  {selectedVoucher && voucherDiscount > 0 && (
+                  {selectedVoucher && roundedVoucherDiscount > 0 && (
                     <View style={[styles.priceRowTable, {backgroundColor:'#e6f0ff'}]}> 
                       <Image source={require('../assets/icons/ticket.png')} style={styles.priceIcon} />
                       <Text style={[styles.priceLabel, {color:'#176FF2'}]}>Giảm giá voucher</Text>
-                      <Text style={[styles.priceValue, {color:'#176FF2'}]}>- {voucherDiscount?.toLocaleString('vi-VN')} VND</Text>
+                      <Text style={[styles.priceValue, {color:'#176FF2'}]}>- {roundedVoucherDiscount.toLocaleString('vi-VN')} VND</Text>
                     </View>
                   )}
                   <View style={styles.priceRowTableTotal}>
                     <Text style={[styles.priceLabel, {fontWeight:'bold', fontSize:20}]}>Tổng cộng</Text>
-                    <Text style={[styles.priceValue, {fontWeight:'bold', fontSize:20, color:'#e53935'}]}>{displayedTotalPrice.toLocaleString('vi-VN')} VND</Text>
+                    <Text style={[styles.priceValue, {fontWeight:'bold', fontSize:20, color:'#e53935'}]}>{roundedTotalPrice.toLocaleString('vi-VN')} VND</Text>
                   </View>
                 </View>
             </View>
@@ -575,7 +612,7 @@ const recalculateTotalPrice = async (voucherObj?: any) => {
                 <View style={{flexDirection:'row', alignItems:'center', marginTop:10,}}>
                     <Text style={styles.firsttext}>Trả hết</Text>
                     <Text style={styles.secondtext}>
-                      {displayedTotalPrice.toLocaleString('vi-VN')} VND
+                      {roundedTotalPrice.toLocaleString('vi-VN')} VND
                     </Text>
                     <View style={{position:'absolute', right:0,}}>
                         <RadioButton
@@ -589,7 +626,7 @@ const recalculateTotalPrice = async (voucherObj?: any) => {
                 <View style={{flexDirection:'row', alignItems:'center', marginTop:10,}}>
                     <Text style={styles.firsttext}>Trả một nửa</Text>
                     <Text style={styles.secondtext}>
-                      {(displayedTotalPrice / 2).toLocaleString('vi-VN')} VND
+                      {(Math.round(roundedTotalPrice / 2)).toLocaleString('vi-VN')} VND
                     </Text>
                     <View style={{position:'absolute', right:0,}}>
                         <RadioButton
@@ -601,7 +638,7 @@ const recalculateTotalPrice = async (voucherObj?: any) => {
                     
                 </View>
                 <Text style={{width:'60%',}}>
-                  Cần trả {(checked === 'second' ? (displayedTotalPrice / 2) : displayedTotalPrice).toLocaleString('vi-VN')} VND hôm nay và còn lại vào ngày {formatRoomDate(selectedRoomsData[0].roomDetails.checkinDate)}
+                  Cần trả {(checked === 'second' ? Math.round(roundedTotalPrice / 2) : roundedTotalPrice).toLocaleString('vi-VN')} VND hôm nay và còn lại vào ngày {formatRoomDate(selectedRoomsData[0].roomDetails.checkinDate)}
                 </Text>
                 
             </View>

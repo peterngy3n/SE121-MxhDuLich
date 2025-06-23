@@ -70,7 +70,7 @@ module.exports.createLocation = async (req, res, next) => {
             category: parseredCategory,
             status,
             province,
-            minPrice,
+            minPrice: 0, // Giá mặc định là 0 khi tạo location
             latitude,
             longtitude,
             ownerId: res.locals.user._id,
@@ -246,9 +246,11 @@ module.exports.searchLocationsAndRooms = async (req, res) => {
         const locationQuery = {};
         if (rating) locationQuery['rating'] = { $gte: parseFloat(rating) };
         if (category) locationQuery['category.id'] = category;
+        let provinceArray = [];
         if (province) {
-            const provinceArray = Array.isArray(province) ? province : province.split(',');
-            locationQuery['province'] = { $in: provinceArray };
+            provinceArray = Array.isArray(province) ? province : province.split(',');
+            // Chuẩn hóa province: loại bỏ tiền tố "tỉnh", "thành phố", ... và chuyển về chữ thường
+            provinceArray = provinceArray.map(p => p.toLowerCase().replace(/^(tỉnh|thành phố|tp\.?|t\.p|city|province)\s*/i, '').trim());
         }
         if (services) {
             const servicesArray = Array.isArray(services) ? services : services.split(',');
@@ -257,7 +259,7 @@ module.exports.searchLocationsAndRooms = async (req, res) => {
         const roomPriceQuery = {};
         if (costMin) roomPriceQuery.$gte = parseFloat(costMin);
         if (costMax) roomPriceQuery.$lte = parseFloat(costMax);
-        const servicesArray = Array.isArray(services) ? services : services.split(',');
+        const servicesArray = Array.isArray(services) ? services : services?.split(',');
 
         const aggregatePipeline = [
             // Kết nối với Rooms
@@ -277,20 +279,59 @@ module.exports.searchLocationsAndRooms = async (req, res) => {
                     as: 'locationServices',
                 },
             },
-            // {
-            //     $project: {
-            //         _id: 1,
-            //         location: '$name',
-            //         rating: 1,
-            //         rooms: 1, // Kiểm tra xem `rooms` có dữ liệu không
-            //     },
-            // },
             // Áp dụng điều kiện lọc cho Location
             {
-                $match: locationQuery,
+                $match: {
+                    ...locationQuery,
+                },
             },
-
-            
+            // Chuẩn hóa và lọc province nếu có
+            ...(provinceArray.length > 0 ? [
+                {
+                    $addFields: {
+                        provinceNormalized: {
+                            $trim: {
+                                input: {
+                                    $replaceAll: {
+                                        input: {
+                                            $replaceAll: {
+                                                input: {
+                                                    $replaceAll: {
+                                                        input: {
+                                                            $replaceAll: {
+                                                                input: {
+                                                                    $replaceAll: {
+                                                                        input: { $toLower: '$province' },
+                                                                        find: 'tỉnh ',
+                                                                        replacement: ''
+                                                                    }
+                                                                },
+                                                                find: 'thành phố ',
+                                                                replacement: ''
+                                                            }
+                                                        },
+                                                        find: 'tp. ',
+                                                        replacement: ''
+                                                    }
+                                                },
+                                                find: 't.p ',
+                                                replacement: ''
+                                            }
+                                        },
+                                        find: 'city ',
+                                        replacement: ''
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    $match: {
+                        provinceNormalized: { $in: provinceArray }
+                    }
+                }
+            ] : []),
             ...(services ? [
                 {
                   $addFields: {
@@ -311,18 +352,6 @@ module.exports.searchLocationsAndRooms = async (req, res) => {
                   }
                 }
               ] : []),
-            // Nếu có điều kiện lọc dịch vụ, lọc các phòng theo `services`
-            // ...(services ? [
-            //     {
-            //       $match: {
-            //         'locationServices.name': {
-            //           $in: Array.isArray(services) ? services : services.split(',')
-            //         }
-            //       }
-            //     }
-            //   ] : []),
-                
-            
             // Nếu có điều kiện lọc giá, lọc các phòng theo `pricePerNight`
             ...(costMin || costMax
                 ? [
@@ -349,7 +378,6 @@ module.exports.searchLocationsAndRooms = async (req, res) => {
                     },
                 ]
                 : []),
-                
             // Dự án kết quả trả về
             {
                 $project: {
@@ -367,7 +395,6 @@ module.exports.searchLocationsAndRooms = async (req, res) => {
                 },
             },
         ];
-
 
 
 

@@ -1,5 +1,6 @@
 const Room = require("../../models/booking/room.model")
 const {Booking} = require("../../models/booking/booking.model")
+const Location = require('../../models/general/location.model');
 
 const {NotFoundException, ForbiddenError} = require("../../errors/exception")
 const { findByIdAndUpdate } = require("../../models/general/business.model")
@@ -85,11 +86,19 @@ const getRoomAvailable = async (rooms, checkinDate, checkoutDate, session = null
 }
 
 const createRoom = async (roomData) => {
-    const savedRoom = await roomData.save()
-    if(savedRoom)
-        return savedRoom
-    else
+    const savedRoom = await roomData.save();
+    if(savedRoom) {
+        // Sau khi tạo phòng, cập nhật minPrice cho location
+        const locationId = savedRoom.locationId;
+        const rooms = await Room.find({ locationId });
+        if (rooms && rooms.length > 0) {
+            const minPrice = Math.min(...rooms.map(r => r.pricePerNight));
+            await Location.findByIdAndUpdate(locationId, { minPrice });
+        }
+        return savedRoom;
+    } else {
         throw new ForbiddenError('Tao phong that bai')
+    }
 }
 
 const updateRoom = async (roomId, roomData, session = null) => {

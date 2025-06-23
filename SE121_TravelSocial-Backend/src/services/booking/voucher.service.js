@@ -6,6 +6,7 @@ const previewBookingService = require('../../services/booking/preview-booking.se
 const {NotFoundException, ForbiddenError} = require('../../errors/exception')
 const { default: mongoose } = require('mongoose')
 const { VOUCHER_SOURCE, VOUCHER_USER, DISCOUNT_TYPE, VOUCHER_STATUS } = require('../../enum/voucher.enum')
+const promotionEventService = require('./promotion-event.service')
 
 const getAllVouchers = async (skip, limit) => {
     const vouchers = await Voucher.find()
@@ -98,7 +99,6 @@ const deleteVoucher = async (voucherId) => {
 }
 
 const verifyVoucher = async (code, previewBookingId, userId, session = null) => {
-
     // Lấy lại preview booking từ redis
     const previewBooking = await previewBookingService.getBookingPreview(userId, previewBookingId)
 
@@ -160,10 +160,55 @@ const verifyVoucher = async (code, previewBookingId, userId, session = null) => 
     console.log("Max discount: ", voucher.maxDiscount)
     // Kiểm tra xem số tiền giảm có lớn hơn maxDiscount không
     discountAmount = Math.min(discountAmount, voucher.maxDiscount)
-    console.log("Discount amount: ", discountAmount)
-    // TODO: Lấy total price
-    return {totalPrice, discountAmount, 
-        totalPriceAfterDiscount: totalPrice - discountAmount}
+
+    // Always fetch locationId from the first room's roomId
+    let locationId = null;
+    if (rooms && rooms.length > 0 && rooms[0].roomId) {
+        const firstRoom = await Room.findById(rooms[0].roomId);
+        if (!firstRoom) throw new NotFoundException('Không tìm thấy phòng');
+        locationId = firstRoom.locationId;
+    } else {
+        throw new NotFoundException('Không tìm thấy phòng để xác định địa điểm');
+    }
+    // Bổ sung hàm tính khuyến mãi từ event
+    async function getBestPromotionEventDiscount(userId, locationId, totalPrice, now = new Date()) {
+        const events = await promotionEventService.getPromotionEventsByLocation(locationId, now);
+        console.log("User ID: ", userId)
+        console.log("Location ID: ", locationId)
+        console.log("Events: ", events)
+        let bestDiscount = 0;
+        let bestEvent = null;
+        for (const event of events) {
+            // Kiểm tra điều kiện đơn hàng tối thiểu
+            if (event.minOrderValue && totalPrice < event.minOrderValue) continue;
+            let discount = 0;
+            if (event.discount.type === 'PERCENT') {
+                discount = (totalPrice * event.discount.amount) / 100;
+            } else if (event.discount.type === 'AMOUNT') {
+                discount = event.discount.amount;
+            }
+            if (event.maxDiscount) discount = Math.min(discount, event.maxDiscount);
+            if (discount > bestDiscount) {
+                bestDiscount = discount;
+                bestEvent = event;
+            }
+        }
+        return { bestDiscount, bestEvent };
+    }
+
+    const { bestDiscount, bestEvent } = await getBestPromotionEventDiscount(userId, locationId, totalPrice);
+
+    console.log("Best discount from promotion event: ", bestDiscount)
+    const voucherDiscountAmount = discountAmount;
+    const promotionDiscountAmount = bestDiscount || 0;
+
+    return {
+        totalPrice,
+        voucherDiscountAmount,
+        promotionDiscountAmount,
+        totalPriceAfterDiscount: totalPrice - voucherDiscountAmount - promotionDiscountAmount,
+        bestPromotionEvent: bestEvent // Optionally return event details for frontend
+    }
 }
 
 //Hàm này sẽ được gọi trong transaction khi người dùng xác nhận đặt phòng

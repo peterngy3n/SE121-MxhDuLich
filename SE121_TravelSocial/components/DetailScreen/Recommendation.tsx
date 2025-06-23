@@ -42,6 +42,27 @@ const fetchWithTimeout = (url: string, options = {}, timeout = 10000) => {
     ]);
 };
 
+    // Fetch promotions for a list of locationIds
+    const fetchPromotionsForLocations = async (locationIds: string[]) => {
+        if (!locationIds || locationIds.length === 0) return [];
+        try {
+            const response = await fetch(`${API_BASE_URL}/locations-with-promotion-by-ids`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ locationIds })
+            });
+            if (response.ok) {
+                const data = await response.json();
+                if (Array.isArray(data.data)) {
+                    return data.data;
+                }
+            }
+        } catch (e) {
+            console.error('Error fetching promotions:', e);
+        }
+        return [];
+    };
+
 const getContentBasedRecommendations = async (pageNumber: number) => {
   try {
     setLoading(true);
@@ -78,18 +99,26 @@ const getContentBasedRecommendations = async (pageNumber: number) => {
       return;
     }
     if (isJson && data && data.recommendations) {
+      // Batch fetch promotions for all recommended locations
+      const locationIds = data.recommendations.map((item: any) => item._id || item.location_id).filter(Boolean);
+      const locationsWithPromotions = await fetchPromotionsForLocations(locationIds);
+      // Merge promotion info into recommendations by _id/location_id
+      const promoMap = new Map();
+      locationsWithPromotions.forEach((loc: any) => {
+        promoMap.set(loc._id || loc.location_id, loc);
+      });
+      const merged = data.recommendations.map((item: any) => {
+        const key = item._id || item.location_id;
+        return promoMap.get(key) ? { ...item, ...promoMap.get(key) } : item;
+      });
       if (pageNumber === 1) {
-        setLocations(data.recommendations);
+        setLocations(merged);
       } else {
-        // Tránh trùng lặp
-        const newItems = data.recommendations;
-        setLocations(prev => {
-          const existingIds = new Set(prev.map(item => item._id || item.location_id));
-          const uniqueNewItems = newItems.filter((item: any) => !existingIds.has(item._id || item.location_id));
-          return [...prev, ...uniqueNewItems];
-        });
+        const existingIds = new Set(locations.map(item => item._id || item.location_id));
+        const uniqueNewItems = merged.filter((item: any) => !existingIds.has(item._id || item.location_id));
+        setLocations(prev => [...prev, ...uniqueNewItems]);
       }
-      setHasMore(data.recommendations.length > 0);
+      setHasMore(merged.length > 0);
       setPage(pageNumber + 1);
     } else {
       setHasMore(false);
@@ -97,11 +126,11 @@ const getContentBasedRecommendations = async (pageNumber: number) => {
   } catch (error: any) {
     setHasMore(false);
     if (error instanceof TypeError && String(error).includes('Network request failed')) {
-      console.error('Content-based Recommend API error:', error);
+      console.log('Content-based Recommend API error:', error);
     } else if (error.message === 'Request timeout') {
-      console.error('Content-based Recommend API error: Request timeout');
+      console.log('Content-based Recommend API error: Request timeout');
     } else {
-      console.error('Content-based Recommend API error:', error);
+      console.log('Content-based Recommend API error:', error);
     }
   } finally {
     setIsFetchingMore(false);
@@ -137,46 +166,71 @@ const getContentBasedRecommendations = async (pageNumber: number) => {
               }}
               onEndReachedThreshold={0.5}
             renderItem={({item, index}) => {
+                // Promotion logic
+                const promotions = item.promotions || item.promotion || [];
+                const hasPromotion = Array.isArray(promotions) ? promotions.length > 0 : !!promotions;
+                const firstPromotion = Array.isArray(promotions) ? promotions[0] : promotions;
+                // Lấy giá (nếu có)
+                const price = item.price || item.minPrice || item.maxPrice || null;
                 return (
                     <TouchableOpacity onPress={() => navigation.navigate('detail-screen', { id: item?._id })} style = {[
                         styles.cardContainer,
                         {
                         marginLeft: 24,
-                        marginRight:  index === locationData.length - 1 ? 24 : 0}]}>
+                        marginRight:  index === locations.length - 1 ? 24 : 0}]}> {/* fixed bug: use locations.length */}
                         <View style={{width: 224}}>
                             <View style = {[styles.imageBox, ]}>
                             <Image
                             source={
                             item?.image
                                 ? { uri: item?.image?.[0]?.url}
-                                : require('@/assets/images/bai-truoc-20.jpg') // Hình ảnh mặc định
+                                : require('@/assets/images/bai-truoc-20.jpg')
                             }
-                            
                             style={styles.image}
-                            /> 
+                            />
+                            {/* Promotion badge góc phải trên */}
+                            {hasPromotion && firstPromotion && (
+                                <View style={{position: 'absolute', top: 8, right: 8, backgroundColor: '#FFB300', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2, zIndex: 2}}>
+                                    <Text style={{color: 'white', fontWeight: 'bold', fontSize: 12}} numberOfLines={1}>
+                                        {firstPromotion.name}
+                                    </Text>
+                                </View>
+                            )}
                                 <View style= {styles.titleBox}>
                                     <View style = {[styles.textBox, {top: 10, width: 70}]}>
                                         <Image source={require('@/assets/icons/star.png')}
                                         style = {styles.star}></Image>
                                         <Text style = {[styles.textrating, {fontSize: 15}]}>{item?.rating}</Text>
                                     </View>
-                                    
-                                    <TouchableOpacity onPress={()=>handlePress(item._id.toString())} style= {[styles.textBox2,{ bottom: 25,}]}>
-                                        <Image source={require('@/assets/icons/heart.png')}
-                                        style={[
-                                        styles.heart, 
-                                        { tintColor: likedItems[item._id] ? 'red' : 'white' } 
-                                    ]}></Image>
-                                    </TouchableOpacity>
                                 </View>
                             </View>
                             <View style = {[styles.footer,{}]}>
-                                <View style ={{ width:150}}>
-                                    <Text style = {[styles.textStyle, {fontSize: 14}]}>{item?.name}</Text>
+                                <View style ={{ width: '100%', }}>
+                                    <Text style = {[styles.textStyle, {fontSize: 14}]} numberOfLines={1}>{item?.name}</Text>
+                                    <View style = {{flexDirection: 'row', alignItems: 'center', marginTop: 2, width: '100%', justifyContent: 'space-between', paddingHorizontal: 14}}>
+{item?.province && (
+                                        <Text style={{ color: '#666', fontSize: 13, marginBottom: 2 }} numberOfLines={1}>{item.province}</Text>
+                                    )}
+                                    {/* Hiển thị giá */}
+                                    {(item?.price || item?.minPrice || item?.maxPrice) && (
+                                        <Text style={{ color: '#196EEE', fontWeight: 'bold', fontSize: 14, marginBottom: 2 }}>
+                                            Giá: {(item.price || item.minPrice || item.maxPrice).toLocaleString()}đ
+                                        </Text>
+                                    )}
+                                    </View>
+                                    {/* Hiển thị tỉnh/thành phố */}
+                                    
+                                    {/* Promotion chi tiết dưới tên */}
+                                    {/* {hasPromotion && firstPromotion && (
+                                        <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 2}}>
+                                            <Image source={require('@/assets/icons/discount.png')} style={{width: 16, height: 16, marginRight: 4}} />
+                                            <Text style={{fontSize: 13, color: '#FF5722', fontWeight: '500'}} numberOfLines={1}>
+                                                {firstPromotion.name} {firstPromotion.discount ? `- Giảm ${firstPromotion.discount.amount}${firstPromotion.discount.type === 'PERCENT' ? '%' : ' VND'}` : ''}
+                                            </Text>
+                                        </View>
+                                    )} */}
                                 </View>
-                                <View style = {[styles.textBox,{borderWidth:3, borderColor:'white',}]}>
-                                    <Text style = {[styles.textStyle2, {marginHorizontal: 5, color: 'white' }]}>hot deal</Text>
-                                </View>
+                                {/* ...existing code... */}
                             </View>
                         </View>
                     </TouchableOpacity>                            
@@ -202,7 +256,7 @@ const styles = StyleSheet.create({
         shadowRadius: 10, // Bán kính bóng
         elevation: 5, // Đổ bóng trên Android
         backgroundColor: 'white', // Nền trắng
-        height: CARD_HEIGHT-20,
+        height: CARD_HEIGHT - 5,
       },
     
     titleText: {

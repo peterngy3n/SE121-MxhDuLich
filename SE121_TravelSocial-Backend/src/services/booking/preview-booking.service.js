@@ -11,11 +11,10 @@ const PREVIEW_TTL_SECONDS = 10 * 60; // 10 phút
 async function createBookingPreview(userId, previewData) {
     const redis = await getRedisClient();
     const { rooms, services } = previewData;
-    const preview = (await (await new PreviewBookingBuilder()
-        .setUserId(userId)
-        .setRooms(rooms))
-        .setServices(services))
-        .build();
+    const builder = new PreviewBookingBuilder();
+    await builder.setUserId(userId).setRooms(rooms);
+    await builder.setServices(services);
+    const preview = await builder.build();
 
     const previewId = uuidv4();
     const userIdStr = userId.toString();

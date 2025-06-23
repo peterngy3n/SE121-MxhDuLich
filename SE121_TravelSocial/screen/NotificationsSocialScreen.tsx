@@ -26,13 +26,27 @@ interface Notification {
   createdAt: string;
   read: boolean;
   status?: string;
-  postId?: string;
+  postId?: {
+    _id: string;
+    title?: string;
+    content?: string;
+    images?: Array<{ url: string }>;
+  }
   postImage?: string;
 }
 
 export default function NotificationsScreen({ navigation, route }: any) {
   const { userId } = useUser();
-  const { onNotification } = useSocket();
+  const socketContext = useSocket();
+  const { onNotification, socket, isConnected } = socketContext;
+
+  // Thêm log kiểm tra socket
+  console.log('NotificationsScreen: socket instance:', socket);
+  console.log('NotificationsScreen: isConnected:', isConnected);
+  if (socket) {
+    console.log('NotificationsScreen: socket.id:', socket.id);
+  }
+
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -56,10 +70,11 @@ export default function NotificationsScreen({ navigation, route }: any) {
       }
 
       const data = await response.json();
-      console.log('Notifications data:', data);
+      console.log('Notifications data:', data); // Log dữ liệu trả về từ API
       
       if (data.isSuccess) {
         setNotifications(data.data);
+        console.log('Set notifications:', data.data); // Log khi set state
       } else {
         console.error('API error:', data.error);
       }
@@ -73,6 +88,7 @@ export default function NotificationsScreen({ navigation, route }: any) {
 
   // Xử lý khi người dùng chấp nhận lời mời kết bạn
   const handleAcceptFriendRequest = async (notificationId: string, senderId: string) => {
+    console.log('Accept friend request:', notificationId, senderId); // Log accept
     try {
       const response = await fetch(`${API_BASE_URL}/respond-request`, {
         method: 'POST',
@@ -88,6 +104,7 @@ export default function NotificationsScreen({ navigation, route }: any) {
       });
 
       const data = await response.json();
+      console.log('Accept friend request response:', data); // Log response
       
       if (response.ok) {
         Alert.alert('Thành công', 'Đã chấp nhận lời mời kết bạn');
@@ -104,6 +121,7 @@ export default function NotificationsScreen({ navigation, route }: any) {
 
   // Xử lý khi người dùng từ chối lời mời kết bạn
   const handleRejectFriendRequest = async (notificationId: string, senderId: string) => {
+    console.log('Reject friend request:', notificationId, senderId); // Log reject
     try {
       const response = await fetch(`${API_BASE_URL}/respond-request`, {
         method: 'POST',
@@ -119,6 +137,7 @@ export default function NotificationsScreen({ navigation, route }: any) {
       });
 
       const data = await response.json();
+      console.log('Reject friend request response:', data); // Log response
       
       if (response.ok) {
         Alert.alert('Thành công', 'Đã từ chối lời mời kết bạn');
@@ -159,25 +178,43 @@ export default function NotificationsScreen({ navigation, route }: any) {
 
   // Lắng nghe notification realtime
   useEffect(() => {
-    if (!onNotification) return;
+    if (!onNotification) {
+      console.log('onNotification callback is not available');
+      return;
+    }
+    console.log('Registering onNotification callback in NotificationsScreen');
     const handleRealtimeNotification = (data: any) => {
+      console.log('Realtime notification received from socket:', data); // Log realtime
       if (data && data.notification) {
         setNotifications(prev => [data.notification, ...prev]);
+        console.log('Set notifications (realtime):', data.notification); // Log set state realtime
+      } else {
+        console.log('Received data from socket but missing notification field:', data);
       }
     };
     onNotification(handleRealtimeNotification);
     // Không cần cleanup vì context đã xử lý
-  }, [onNotification]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Render từng thông báo tùy theo loại
-  const renderItem = ({ item }: { item: Notification }) => (
-    <NotificationCard 
-      mode={item.type}
-      data={item}
-      onAccept={() => handleAcceptFriendRequest(item._id, item.sender._id)}
-      onReject={() => handleRejectFriendRequest(item._id, item.sender._id)}
-    />
-  );
+  const renderItem = ({ item }: { item: Notification }) => {
+    console.log('Render notification item:', item); // Log khi render từng item
+    const handlePress = () => {
+      if (item.type === 'COMMENT' && item.postId) {
+        navigation.navigate('post-detail-screen', { postId: item.postId._id });
+      }
+    };
+    return (
+      <NotificationCard 
+        mode={item.type}
+        data={item}
+        onAccept={() => handleAcceptFriendRequest(item._id, item.sender._id)}
+        onReject={() => handleRejectFriendRequest(item._id, item.sender._id)}
+        onPress={handlePress} // Thêm prop onPress
+      />
+    );
+  };
 
   return (
     <View style={styles.container}>

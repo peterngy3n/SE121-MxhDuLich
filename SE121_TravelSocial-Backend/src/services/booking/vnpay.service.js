@@ -29,7 +29,7 @@ const createPayment = async (bookingId, clientIp = null) => {
     tomorrow.setDate(tomorrow.getDate() + 1); // Set expiration date to tomorrow
 
     const vnpayResponse = await vnpay.buildPaymentUrl({
-        vnp_Amount: booking.totalPriceAfterTax, // Amount in VND
+        vnp_Amount: Math.round(booking.totalPriceAfterTax), // Amount in VND
         vnp_IpAddr: clientIp || "127.0.0.1",
         vnp_TxnRef: `${bookingId}_${Date.now()}`, // Unique transaction reference
         vnp_OrderInfo: `Payment for booking ${bookingId}`,

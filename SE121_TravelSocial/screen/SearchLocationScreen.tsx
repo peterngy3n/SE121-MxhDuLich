@@ -63,6 +63,7 @@ export default function SearchLocationScreen({ navigation }: { navigation: Nativ
     
             const query = new URLSearchParams(filters).toString();
             const response = await fetch(`${API_BASE_URL}/search?${query}`);
+            console.log('Filter API URL:', `${API_BASE_URL}/search?${query}`); // Log URL để kiểm tra
             const data = await response.json();
     
             if (Array.isArray(data) && data.length > 0) {
@@ -146,6 +147,15 @@ export default function SearchLocationScreen({ navigation }: { navigation: Nativ
                             style={styles.image}
                         />
                         <Text style={styles.cardTitle}>{item.name}</Text>
+                        {/* Hiển thị promotion nếu có */}
+                        {item.promotions && item.promotions.length > 0 && (
+                            <View style={styles.promotionContainer}>
+                                <Image source={require('../assets/icons/discount.png')} style={styles.promotionIcon} />
+                                <Text style={styles.promotionText} numberOfLines={1}>
+                                    {item.promotions[0].name} {item.promotions[0].discount ? `- Giảm ${item.promotions[0].discount.amount}${item.promotions[0].discount.type === 'PERCENT' ? '%' : ' VND'}` : ''}
+                                </Text>
+                            </View>
+                        )}
                         <Text style={{fontSize: 16, fontWeight: '400', marginTop: 5}}>{typeof item?.minPrice === 'number'
                         ? item.minPrice.toLocaleString('vi-VN') + ' VND'
                         : 'Giá không xác định'}</Text>
@@ -257,5 +267,27 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontWeight: '600',
         fontSize: 14,
+    },
+    promotionContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFF9C4',
+        borderRadius: 8,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        marginTop: 4,
+        marginBottom: 2,
+        alignSelf: 'flex-start',
+    },
+    promotionIcon: {
+        width: 18,
+        height: 18,
+        marginRight: 6,
+    },
+    promotionText: {
+        color: '#B8860B',
+        fontWeight: 'bold',
+        fontSize: 13,
+        maxWidth: 120,
     },
 });

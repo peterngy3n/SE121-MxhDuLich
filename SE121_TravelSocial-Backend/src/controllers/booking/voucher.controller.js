@@ -126,7 +126,8 @@ module.exports.verifyVoucher = async (req, res, next) => {
             isSuccess: true,
             data: {
                 totalPrice: result.totalPrice,
-                discount: result.discountAmount,
+                voucherDiscount: result.voucherDiscountAmount,
+                promotionDiscount: result.promotionDiscountAmount,
                 totalPriceAfterDiscount: result.totalPriceAfterDiscount
             },
             error: null
